@@ -3,37 +3,58 @@ const validator = require("validator");
 const userRoles = require("../utils/userRoles");
 
 const userSchenma = new mongoose.Schema({
-    firstName :{
+    firstName: {
         type: String,
         required: true
     },
-    lastName :{
+    lastName: {
         type: String,
         required: true
     },
-    email :{
+    email: {
         type: String,
         required: true,
         unique: true,
-        validate:[validator.isEmail , 'Must be valid email']
+        validate: [validator.isEmail, 'Must be valid email']
     },
-    password :{
+    password: {
         type: String,
-        required: true
+        required: true,
     },
-    token:{
-        type:String,
+    token: {
+        type: String,
     },
-    role:{
-        type:String,
-        enum:[userRoles.ADMIN , userRoles.USER],
-        default: userRoles.USER
+    role: {
+        type: String,
+        enum: [userRoles.ADMIN, userRoles.INSTRUCTOR, userRoles.USER],
+        default: userRoles.USER,
     },
-    avatar:{
+    avatar: {
         type: String,
         default: 'uploads/default-avatar.png'
-    }
+    },
+    emailVerificationToken: {
+        type: String,
+        select: false,   // مش هيترجع في الـ queries بالافتراضي
+    },
+    emailVerificationExpires: {
+        type: Date,
+        select: false,
+    },
+    isVerified: {
+        type: Boolean,
+        default: false,
+    },
+
+    passwordResetToken: { 
+        type: String,
+        select: false
+    },
+    passwordResetExpires: {
+        type: Date, 
+        select: false 
+    },
 
 })
 
-module.exports = mongoose.model('User' , userSchenma)
+module.exports = mongoose.model('User', userSchenma)

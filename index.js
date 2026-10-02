@@ -21,8 +21,12 @@ app.use('/api/courses' , coursesRouter)
 const userRouter = require('./routes/user.routes')
 app.use('/api/users' , userRouter)
 
+//auth
+const authRouter = require('./routes/auth.routes')
+app.use('/api/auth' , authRouter)
+
 app.all(/.*/ , (req , res , next )=>{
-   return res.status(404).json({ status: httpStatusText.ERROR , message: "This resourse is not available" })
+    return res.status(404).json({ status: httpStatusText.ERROR , message: "This resourse is not available" })
 })
 
 app.use(( error , req ,res ,next)=>{
