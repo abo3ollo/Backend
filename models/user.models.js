@@ -55,6 +55,11 @@ const userSchenma = new mongoose.Schema({
         select: false 
     },
 
+    tokenVersion: {
+        type: Number, 
+        default: 0 
+    },
+
 })
 
 module.exports = mongoose.model('User', userSchenma)

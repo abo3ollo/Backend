@@ -24,7 +24,7 @@ const register = asyncWrapper(
         //password hashing
         const hashedPassword = await bcrypt.hash(password, 10)
 
-         // ── email verification token ──
+        // ── email verification token ──
         const rawVerifyToken = crypto.randomBytes(32).toString("hex");
         const hashedVerifyToken = crypto
             .createHash("sha256")
@@ -231,10 +231,35 @@ const resetPassword = asyncWrapper(async (req, res, next) => {
     });
 });
 
+
+const logout = asyncWrapper(async (req, res) => {
+    const user = await User.findById(req.currentUser.id);
+    if (user) {
+        user.refreshTokenHash = undefined;
+        await user.save({ validateBeforeSave: false });
+    }
+    res.status(200).json({ status: httpStatusText.SUCCESS, data: null });
+});
+
+const logoutAll = asyncWrapper(async (req, res) => {
+    const user = await User.findById(req.currentUser.id);
+    if (user) {
+        user.tokenVersion = (user.tokenVersion || 0) + 1;
+        user.refreshTokenHash = undefined;
+        await user.save({ validateBeforeSave: false });
+    }
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: "Logged out from all devices",
+    });
+});
+
 module.exports = {
     register,
     login,
     verifyEmail,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    logout,
+    logoutAll
 }

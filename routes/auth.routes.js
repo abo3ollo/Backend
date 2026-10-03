@@ -50,5 +50,11 @@ router.route("/forgot-password")
 router.route("/reset-password/:token")
             .patch(resetPasswordValidator, validate, authController.resetPassword);
 
+router.route("/logout")
+    .post(verifyToken, authController.logout);
+
+router.route("/logout-all")
+    .post(verifyToken, authController.logoutAll);
+
 
 module.exports = router 
