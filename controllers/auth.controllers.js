@@ -78,14 +78,14 @@ const login = asyncWrapper(
     async (req, res, next) => {
         const { email, password } = req.body
 
-        if (!email && password) {
+        if (!email || !password) {
             const error = appError.create('Email & password are required', 400, httpStatusText.FAIL)
             return next(error)
         }
 
         const user = await User.findOne({ email: email })
         if (!user) {
-            const error = appError.create('user not found', 400, httpStatusText.FAIL)
+            const error = appError.create('user not found', 401, httpStatusText.FAIL)
             return next(error)
         }
 
@@ -96,7 +96,7 @@ const login = asyncWrapper(
             const token = await generateJWT({ email: user.email, id: user._id, role: user.role })
             res.status(201).json({ status: httpStatusText.SUCCESS, data: { token } });
         } else {
-            const error = appError.create('Email & password are not matched', 500, httpStatusText.FAIL)
+            const error = appError.create('Email & password are not matched', 401, httpStatusText.FAIL)
             return next(error)
         }
     })
