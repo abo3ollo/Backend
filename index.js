@@ -13,6 +13,19 @@ app.use(cors())
 app.use(express.json());
 // app.use(exprees.body-parser.json())
 
+// Welcome route
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "🎓 Courses API is running",
+    version: "1.0.0",
+    endpoints: {
+      auth: "/api/auth",
+      courses: "/api/courses",
+      users: "/api/users",
+    },
+  });
+});
 
 const coursesRouter = require('./routes/courses.routes')
 app.use('/api/courses' , coursesRouter)
