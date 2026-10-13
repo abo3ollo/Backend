@@ -1,17 +1,55 @@
-require('dotenv').config()
-const httpStatusText = require("./utils/httpStatusText")
+
+require("dotenv").config();
 
 const express = require("express");
-const path = require('path')
-const cors = require('cors')
+const path = require("path");
+const cors = require("cors");
+const mongoose = require("mongoose");
+
+const httpStatusText = require("./utils/httpStatusText");
+
 const app = express();
 
-app.use('/uploads' , express.static(path.join(__dirname,'uploads')))
-
-// Adds headers: Access-Control-Allow-Origin: *
-app.use(cors())
+// Middleware
+app.use(cors());
 app.use(express.json());
-// app.use(exprees.body-parser.json())
+
+// Static uploads (temporary/local storage only on Vercel)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// MongoDB connection cache
+let mongoPromise;
+
+async function connectDB() {
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  if (!process.env.MONGO_URL) {
+    throw new Error("MONGO_URL environment variable is missing");
+  }
+
+  if (!mongoPromise) {
+    mongoPromise = mongoose
+      .connect(process.env.MONGO_URL)
+      .catch((error) => {
+        mongoPromise = null;
+        throw error;
+      });
+  }
+
+  await mongoPromise;
+}
+
+// Connect to MongoDB before handling API requests
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Welcome route
 app.get("/", (req, res) => {
@@ -27,37 +65,48 @@ app.get("/", (req, res) => {
   });
 });
 
-const coursesRouter = require('./routes/courses.routes')
-app.use('/api/courses' , coursesRouter)
+// Courses routes
+const coursesRouter = require("./routes/courses.routes");
+app.use("/api/courses", coursesRouter);
 
-//users
-const userRouter = require('./routes/user.routes')
-app.use('/api/users' , userRouter)
+// Users routes
+const userRouter = require("./routes/user.routes");
+app.use("/api/users", userRouter);
 
-//auth
-const authRouter = require('./routes/auth.routes')
-app.use('/api/auth' , authRouter)
+// Authentication routes
+const authRouter = require("./routes/auth.routes");
+app.use("/api/auth", authRouter);
 
-app.all(/.*/ , (req , res , next )=>{
-    return res.status(404).json({ status: httpStatusText.ERROR , message: "This resourse is not available" })
-})
-
-app.use(( error , req ,res ,next)=>{
-    res.status(error.statusCode || 500).json({ status: error.statusText || httpStatusText.ERROR , message: error.message , code: error.statusCode ||500 , data : null})
-})
-
-const mangoose = require("mongoose");
-const url = process.env.MONGO_URL
-
-mangoose.connect(url).then(()=>{
-    console.log("Mangodb server started");
-    
-})
-
-
-
-const port = process.env.PORT || 5000
-// run server
-app.listen(port, () => {
-    console.log("listening on port:" , port);
+// 404 handler
+app.all(/.*/, (req, res) => {
+  return res.status(404).json({
+    status: httpStatusText.ERROR,
+    message: "This resource is not available",
+  });
 });
+
+// Global error handler
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(error.statusCode || 500).json({
+    status: error.statusText || httpStatusText.ERROR,
+    message: error.message || "Internal server error",
+    code: error.statusCode || 500,
+    data: null,
+  });
+});
+
+// Export Express app for Vercel
+module.exports = app;
+
+// Run a regular server for local development
+if (require.main === module) {
+  const port = process.env.PORT || 5000;
+
+  app.listen(port, () => {
+    console.log("Listening on port:", port);
+  });
+}
