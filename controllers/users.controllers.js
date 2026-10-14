@@ -17,8 +17,21 @@ const getAllusers = asyncWrapper(
         res.json({ status: httpStatusText.SUCCESS, data: { users } });
     });
 
+const getMe = asyncWrapper(async (req, res, next) => {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+        return next(appError.create("User not found", 404, httpStatusText.FAIL));
+    }
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { user },
+    });
+});
+
 
 module.exports = {
     getAllusers,
+    getMe,
 
 }

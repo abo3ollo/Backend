@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.route("/")
             .get(verifyToken, usersController.getAllusers)
-
+    
+router.route("/me")
+            .get(verifyToken, usersController.getMe);
 
 module.exports = router 

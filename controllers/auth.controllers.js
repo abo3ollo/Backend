@@ -71,35 +71,51 @@ const register = asyncWrapper(
             console.log("🔗 Verify URL (dev):", verifyUrl);
         }
         res.status(201).json({ status: httpStatusText.SUCCESS, data: { user: newUser } });
+});
+
+
+const login = asyncWrapper(async (req, res, next) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return next(appError.create('Email & password are required', 400, httpStatusText.FAIL));
+    }
+
+    // ✅ select password
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user) {
+        return next(appError.create('Invalid credentials', 401, httpStatusText.FAIL));
+    }
+
+    const matchedPassword = await bcrypt.compare(password, user.password);
+    if (!matchedPassword) {
+        return next(appError.create('Invalid credentials', 401, httpStatusText.FAIL));
+    }
+
+    const token = await generateJWT({
+        email: user.email,
+        id: user._id,
+        role: user.role,
     });
 
+    user.password = undefined;
 
-const login = asyncWrapper(
-    async (req, res, next) => {
-        const { email, password } = req.body
+    // ✅ حط التوكن في httpOnly cookie
+    res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 24 * 60 * 60 * 1000,   // 1 يوم
+        path: "/",
+    });
 
-        if (!email || !password) {
-            const error = appError.create('Email & password are required', 400, httpStatusText.FAIL)
-            return next(error)
-        }
-
-        const user = await User.findOne({ email: email })
-        if (!user) {
-            const error = appError.create('user not found', 401, httpStatusText.FAIL)
-            return next(error)
-        }
-
-        const matchedPassword = await bcrypt.compare(password, user.password)
-
-        if (user && matchedPassword) {
-
-            const token = await generateJWT({ email: user.email, id: user._id, role: user.role })
-            res.status(201).json({ status: httpStatusText.SUCCESS, data: { token } });
-        } else {
-            const error = appError.create('Email & password are not matched', 401, httpStatusText.FAIL)
-            return next(error)
-        }
-    })
+    // ✅ رجّع user بس (مفيش token)
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { user },
+    });
+});
 
 
 const verifyEmail = asyncWrapper(async (req, res, next) => {
@@ -187,6 +203,7 @@ const forgotPassword = asyncWrapper(async (req, res, next) => {
     res.status(200).json(genericResponse);
 });
 
+
 const resetPassword = asyncWrapper(async (req, res, next) => {
     const { token } = req.params;      // من الـ URL
     const { password } = req.body;     // من الفورم/Postman
@@ -233,21 +250,38 @@ const resetPassword = asyncWrapper(async (req, res, next) => {
 
 
 const logout = asyncWrapper(async (req, res) => {
-    const user = await User.findById(req.currentUser.id);
-    if (user) {
-        user.refreshTokenHash = undefined;
-        await user.save({ validateBeforeSave: false });
-    }
-    res.status(200).json({ status: httpStatusText.SUCCESS, data: null });
+    // ✅ امسح الكوكي
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+    });
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: "Logged out successfully",
+    });
 });
 
+
 const logoutAll = asyncWrapper(async (req, res) => {
-    const user = await User.findById(req.currentUser.id);
+    const user = await User.findById(req.user.id);
+
     if (user) {
+        // ✅ اقتل كل الجلسات
         user.tokenVersion = (user.tokenVersion || 0) + 1;
-        user.refreshTokenHash = undefined;
         await user.save({ validateBeforeSave: false });
     }
+
+    // ✅ امسح الكوكي
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+    });
+
     res.status(200).json({
         status: httpStatusText.SUCCESS,
         message: "Logged out from all devices",
@@ -261,5 +295,5 @@ module.exports = {
     forgotPassword,
     resetPassword,
     logout,
-    logoutAll
+    logoutAll,
 }

@@ -4,6 +4,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
+const cookieParser = require('cookie-parser'); 
 const mongoose = require("mongoose");
 
 const httpStatusText = require("./utils/httpStatusText");
@@ -11,8 +12,18 @@ const httpStatusText = require("./utils/httpStatusText");
 const app = express();
 
 // Middleware
-app.use(cors());
+// CORS — مع credentials
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "https://course-project-ten-gules.vercel.app",
+    process.env.CLIENT_URL,
+  ].filter(Boolean),
+  credentials: true,   // ← مهم جدًا
+}));
+
 app.use(express.json());
+app.use(cookieParser()); 
 
 // Static uploads (temporary/local storage only on Vercel)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
