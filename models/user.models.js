@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema(
         },
         token: {
             type: String,
-            select: false,
+            // select: false,
         },
         role: {
             type: String,
@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
         toJSON: {
             transform: (doc, ret) => {
                 delete ret.password;
-                delete ret.token;
+                // delete ret.token;
                 delete ret.__v;
                 delete ret.tokenVersion;
                 delete ret.emailVerificationToken;

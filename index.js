@@ -17,6 +17,7 @@ app.use(cors({
   origin: [
     "http://localhost:3000",
     "https://course-project-ten-gules.vercel.app",
+    "https://course-project-full.vercel.app",
     process.env.CLIENT_URL,
   ].filter(Boolean),
   credentials: true,   // ← مهم جدًا
