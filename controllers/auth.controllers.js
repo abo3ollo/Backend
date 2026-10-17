@@ -50,7 +50,7 @@ const register = asyncWrapper(
 
 
         // ── send verification email ──
-        const verifyUrl = `${req.protocol}://${req.get("host")}/api/auth/verify-email/${rawVerifyToken}`;
+        const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${rawVerifyToken}`;
 
         if (process.env.SMTP_HOST) {
             try {
