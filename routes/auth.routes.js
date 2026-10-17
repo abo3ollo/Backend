@@ -2,6 +2,16 @@ const express = require("express");
 const authController = require("../controllers/auth.controllers");
 const verifyToken = require("../middlewares/verifyToken");
 const appError = require("../utils/appError");
+const rateLimit = require("express-rate-limit");
+
+const resendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 3,
+  message: {
+    status: "FAIL",
+    message: "Too many attempts. Try again later.",
+  },
+});
 
 const multer  = require('multer');
 const { registerValidator, loginValidator, forgotPasswordValidator, validate, resetPasswordValidator } = require("../middlewares/validationsSchema");
@@ -43,6 +53,9 @@ router.route("/login")
 
 router.route("/verify-email/:token")
             .get(authController.verifyEmail);
+
+router.route("/resend-verification")
+            .post(resendLimiter, authController.resendVerification);
 
 router.route("/forgot-password")
             .post(forgotPasswordValidator,validate, authController.forgotPassword);

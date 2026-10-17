@@ -93,6 +93,15 @@ const login = asyncWrapper(async (req, res, next) => {
         return next(appError.create('Invalid credentials', 401, httpStatusText.FAIL));
     }
 
+    // ✅ NEW: امنع الدخول لو مش متحقق
+    if (!user.isVerified) {
+        return next(appError.create(
+            'Please verify your email first. Check your inbox.',
+            403,
+            httpStatusText.FAIL
+        ));
+    }
+
     const token = await generateJWT({
         email: user.email,
         id: user._id,
@@ -141,6 +150,57 @@ const verifyEmail = asyncWrapper(async (req, res, next) => {
         status: httpStatusText.SUCCESS,
         message: "Email verified successfully",
     });
+});
+
+const resendVerification = asyncWrapper(async (req, res, next) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return next(appError.create("Email is required", 400, httpStatusText.FAIL));
+    }
+
+    const user = await User.findOne({ email });
+
+    // ✅ رد عام في كل الحالات (منع user enumeration)
+    const genericResponse = {
+        status: httpStatusText.SUCCESS,
+        message: "If that email exists and is not verified, a verification link has been sent.",
+    };
+
+    if (!user || user.isVerified) {
+        return res.status(200).json(genericResponse);
+    }
+
+    // اعمل توكن جديد
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    user.emailVerificationToken = hashed;
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 ساعة
+    await user.save({ validateBeforeSave: false });
+
+    // ابعت الإيميل
+    const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${rawToken}`;
+
+    if (process.env.SMTP_HOST) {
+        try {
+            await sendEmail({
+                to: user.email,
+                subject: "Verify your email",
+                html: `
+                    <p>Hi ${user.firstName},</p>
+                    <p>Click <a href="${verifyUrl}">here</a> to verify your email.</p>
+                    <p>This link expires in 24 hours.</p>
+                `,
+            });
+        } catch (err) {
+            console.warn("Email send failed:", err.message);
+        }
+    } else {
+        console.log("🔗 Verify URL (dev):", verifyUrl);
+    }
+
+    res.status(200).json(genericResponse);
 });
 
 
@@ -292,6 +352,7 @@ module.exports = {
     register,
     login,
     verifyEmail,
+    resendVerification,
     forgotPassword,
     resetPassword,
     logout,
