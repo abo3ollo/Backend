@@ -1,6 +1,7 @@
 const express = require("express");
 const authController = require("../controllers/auth.controllers");
 const verifyToken = require("../middlewares/verifyToken");
+const cloudinaryUpload = require("../middlewares/cloudinaryUpload");
 const appError = require("../utils/appError");
 const rateLimit = require("express-rate-limit");
 
@@ -46,7 +47,7 @@ const router = express.Router();
 
 
 router.route("/register")
-            .post( registerValidator,upload.single('avatar'), authController.register)
+            .post( registerValidator, cloudinaryUpload.single('avatar'), authController.register)
 
 router.route("/login")
             .post(loginValidator, authController.login)

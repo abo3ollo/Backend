@@ -12,7 +12,7 @@ const sendEmail = require("../utils/sendEmail");
 const register = asyncWrapper(
     async (req, res, next) => {
         const { firstName, lastName, email, password, role } = req.body;
-        const avatar = req.file ? req.file.filename : 'uploads/default-avatar.png';
+        const avatar = req.file ? req.file.path : 'https://res.cloudinary.com/demo/image/upload/default-avatar.png';
 
         const oldUser = await User.findOne({ email: email })
 
