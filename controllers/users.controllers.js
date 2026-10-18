@@ -93,9 +93,11 @@ const uploadAvatar = asyncWrapper(async (req, res, next) => {
         return next(appError.create("Please upload an image", 400, httpStatusText.FAIL));
     }
 
+    const imageUrl = req.file.secure_url || req.file.url || req.file.path;
+
     const user = await User.findByIdAndUpdate(
         req.user.id,
-        { avatar: req.file.filename },
+        { avatar: imageUrl },
         { new: true, runValidators: true }
     );
 
