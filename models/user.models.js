@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema(
         },
         avatar: {
             type: String,
-            default: 'uploads/default-avatar.png',
+            default: 'https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/v1/default-avatar.png',
         },
         emailVerificationToken: {
             type: String,
