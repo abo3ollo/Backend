@@ -128,7 +128,7 @@ const addSection = asyncWrapper(async (req, res, next) => {
     }
 
     // التأكد إن اللي بيضيف القسم هو صاحب الكورس
-    if (course.instructor.toString() !== req.user.id && req.user.role !== 'ADMIN') {
+    if (course.instructor.toString() !== req.user.id.toString() && req.user.role !== 'ADMIN') {
         return next(appError.create("You are not authorized to add sections to this course", 403, httpStatusText.FAIL));
     }
 
