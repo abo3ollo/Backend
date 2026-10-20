@@ -36,4 +36,11 @@ router.route("/:courseId/enroll")
         courseController.enrollCourse
     );
 
+    router.route("/:courseId/sections")
+    .post(
+        verifyToken,
+        allowedTo(userRoles.INSTRUCTOR,userRoles.ADMIN),
+        courseController.addSection
+    )
+
 module.exports = router;

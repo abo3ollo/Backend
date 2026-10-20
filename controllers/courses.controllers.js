@@ -30,11 +30,25 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
 });
 
 const CreateCourse = asyncWrapper(async (req, res, next) => {
-    const { title, description, price, category, level, isPublished } = req.body;
+    // ✅ استقبلنا الحقول الجديدة كلها
+    const { 
+        title, description, price, category, level, isPublished,
+        subtitle, language, promoVideo, promotionalPrice, sections 
+    } = req.body;
 
     const thumbnail = req.file 
         ? (req.file.secure_url || req.file.path) 
         : "https://res.cloudinary.com/demo/image/upload/default-course.jpg";
+
+    // ✅ بنعمل parse للـ sections لأنها بتيجي كـ String من الـ FormData
+    let parsedSections = [];
+    if (sections) {
+        try {
+            parsedSections = JSON.parse(sections);
+        } catch (err) {
+            console.error("Error parsing sections:", err);
+        }
+    }
 
     const newCourse = await Course.create({
         title,
@@ -42,9 +56,14 @@ const CreateCourse = asyncWrapper(async (req, res, next) => {
         price,
         category,
         level,
+        subtitle,
+        language,
+        promoVideo,
+        promotionalPrice: promotionalPrice ? Number(promotionalPrice) : undefined,
         isPublished: isPublished === 'true' || isPublished === true,
         thumbnail,
         instructor: req.user.id,
+        sections: parsedSections, // ✅ حفظ الأقسام
     });
 
     res.status(201).json({ status: httpStatusText.SUCCESS, data: { course: newCourse } });
@@ -99,11 +118,37 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
     });
 });
 
+const addSection = asyncWrapper(async (req, res, next) => {
+    const courseId = req.params.courseId;
+    
+    // بنجيب الكورس
+    const course = await Course.findById(courseId);
+    if (!course) {
+        return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    }
+
+    // التأكد إن اللي بيضيف القسم هو صاحب الكورس
+    if (course.instructor.toString() !== req.user.id && req.user.role !== 'ADMIN') {
+        return next(appError.create("You are not authorized to add sections to this course", 403, httpStatusText.FAIL));
+    }
+
+    // بنضيف القسم
+    course.sections.push(req.body);
+    await course.save();
+
+    res.status(200).json({ 
+        status: httpStatusText.SUCCESS, 
+        message: "Section added successfully",
+        data: { course } 
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
     CreateCourse,
     updateCourse,
     deleteCourse,
-    enrollCourse
+    enrollCourse,
+    addSection
 };
