@@ -30,4 +30,10 @@ router.route("/:courseId")
         courseController.deleteCourse
     );
 
+router.route("/:courseId/enroll")
+    .post(
+        verifyToken, 
+        courseController.enrollCourse
+    );
+
 module.exports = router;

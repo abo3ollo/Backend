@@ -2,6 +2,7 @@ const Course = require("../models/courses.models");
 const httpStatusText = require("../utils/httpStatusText");
 const appError = require('../utils/appError');
 const asyncWrapper = require("../middlewares/asyncWrapper");
+const Enrollment = require("../models/enrollment.models"); 
 
 const getAllCourse = asyncWrapper(async (req, res) => {
     const query = req.query;
@@ -70,10 +71,39 @@ const deleteCourse = asyncWrapper(async (req, res) => {
     res.status(200).json({ status: httpStatusText.SUCCESS, data: null });
 });
 
+const enrollCourse = asyncWrapper(async (req, res, next) => {
+    const courseId = req.params.courseId;
+    const userId = req.user.id;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+        return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    }
+
+    // التأكد إن المستخدم مش متسجل بالفعل
+    const existingEnrollment = await Enrollment.findOne({ user: userId, course: courseId });
+    if (existingEnrollment) {
+        return next(appError.create("You are already enrolled in this course", 400, httpStatusText.FAIL));
+    }
+
+    // إنشاء التسجيل
+    const enrollment = await Enrollment.create({
+        user: userId,
+        course: courseId,
+    });
+
+    res.status(201).json({
+        status: httpStatusText.SUCCESS,
+        message: "Enrolled successfully!",
+        data: { enrollment },
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
     CreateCourse,
     updateCourse,
     deleteCourse,
+    enrollCourse
 };
