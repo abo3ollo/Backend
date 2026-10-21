@@ -40,6 +40,7 @@ router.route("/:courseId/enroll")
     .post(
         verifyToken,
         allowedTo(userRoles.INSTRUCTOR,userRoles.ADMIN),
+        cloudinaryUpload.single("video"), 
         courseController.addSection
     )
 

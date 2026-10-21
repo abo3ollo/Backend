@@ -4,13 +4,19 @@ const multer = require("multer");
 
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: "courses-app/users", // اسم الفولدر في Cloudinary
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
-    transformation: [{ width: 500, height: 500, crop: "limit" }], // تصغير الصورة
+  params: async (req, file) => {
+    // ✅ لو الملف فيديو، نخلي النوع video
+    const isVideo = file.mimetype.startsWith("video");
+    
+    return {
+      folder: isVideo ? "courses-app/videos" : "courses-app/users",
+      resource_type: isVideo ? "video" : "image", // 👈 المفتاح هنا
+      allowed_formats: isVideo 
+        ? ["mp4", "mov", "webm"] 
+        : ["jpg", "jpeg", "png", "webp"],
+    };
   },
 });
 
 const cloudinaryUpload = multer({ storage });
-
 module.exports = cloudinaryUpload;

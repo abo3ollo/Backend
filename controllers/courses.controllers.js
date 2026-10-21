@@ -120,25 +120,29 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
 
 const addSection = asyncWrapper(async (req, res, next) => {
     const courseId = req.params.courseId;
-    
-    // بنجيب الكورس
     const course = await Course.findById(courseId);
+    
     if (!course) {
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
     }
 
-    // التأكد إن اللي بيضيف القسم هو صاحب الكورس
     if (course.instructor.toString() !== req.user.id.toString() && req.user.role !== 'ADMIN') {
-        return next(appError.create("You are not authorized to add sections to this course", 403, httpStatusText.FAIL));
+        return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
     }
 
-    // بنضيف القسم
-    course.sections.push(req.body);
+    // ✅ لو فيه فيديو مرفوع، خد اللينك بتاعه
+    const videoUrl = req.file ? req.file.path : undefined;
+
+    // نضيف القسم مع الفيديو
+    course.sections.push({
+        ...req.body,
+        videoUrl: videoUrl, // اللينك من Cloudinary
+    });
+    
     await course.save();
 
     res.status(200).json({ 
         status: httpStatusText.SUCCESS, 
-        message: "Section added successfully",
         data: { course } 
     });
 });
