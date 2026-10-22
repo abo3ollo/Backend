@@ -16,6 +16,9 @@ router.route("/")
         cloudinaryUpload.single("thumbnail"), // 👈 استقبال الصورة
         courseController.CreateCourse
     );
+    
+router.route("/my-courses")
+    .get(verifyToken, courseController.getMyCourses);
 
 router.route("/:courseId")
     .get(optionalAuth,courseController.getSingleCourse)
@@ -37,7 +40,7 @@ router.route("/:courseId/enroll")
         courseController.enrollCourse
     );
 
-    router.route("/:courseId/sections")
+router.route("/:courseId/sections")
     .post(
         verifyToken,
         allowedTo(userRoles.INSTRUCTOR,userRoles.ADMIN),

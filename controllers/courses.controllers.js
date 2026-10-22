@@ -71,6 +71,27 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
     });
 });
 
+const getMyCourses = asyncWrapper(async (req, res, next) => {
+    // بنجيب كل الكورسات اللي الطالب ده مشترك فيها
+    const enrollments = await Enrollment.find({ user: req.user.id })
+        .populate({
+            path: "course",
+            populate: {
+                path: "instructor",
+                select: "firstName lastName avatar",
+            },
+        });
+
+    // بنستخرج الكورسات بس من الـ Enrollments
+    const courses = enrollments.map((enrollment) => enrollment.course);
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        results: courses.length,
+        data: { courses },
+    });
+});
+
 const CreateCourse = asyncWrapper(async (req, res, next) => {
     // ✅ استقبلنا الحقول الجديدة كلها
     const { 
@@ -256,13 +277,14 @@ const deleteSection = asyncWrapper(async (req, res, next) => {
     res.status(200).json({ status: httpStatusText.SUCCESS, data: { course } });
 });
 
- // تأكد إنك مستورد الموديل ده
+
 
 
 
 module.exports = {
     getAllCourse,
     getSingleCourse,
+    getMyCourses,
     CreateCourse,
     updateCourse,
     deleteCourse,
