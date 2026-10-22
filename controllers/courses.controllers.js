@@ -4,6 +4,7 @@ const appError = require('../utils/appError');
 const asyncWrapper = require("../middlewares/asyncWrapper");
 const Enrollment = require("../models/enrollment.models"); 
 
+
 const getAllCourse = asyncWrapper(async (req, res) => {
     const query = req.query;
     const limit = query.limit || 10;
@@ -19,14 +20,55 @@ const getAllCourse = asyncWrapper(async (req, res) => {
 });
 
 const getSingleCourse = asyncWrapper(async (req, res, next) => {
-    const course = await Course.findById(req.params.courseId)
-        .populate("instructor", "firstName lastName avatar");
+    const courseId = req.params.courseId;
+    
+    // بنجيب الكورس
+    const course = await Course.findById(courseId).populate(
+        "instructor", 
+        "firstName lastName avatar"
+    );
 
     if (!course) {
-        const error = appError.create("Course Not Found", 404, httpStatusText.FAIL);
-        return next(error);
+        return next(appError.create("Course not found", 404, httpStatusText.FAIL));
     }
-    return res.json({ status: httpStatusText.SUCCESS, data: { course } });
+
+    let isAuthorized = false;
+
+    // لو فيه يوزر مسجل دخول (عشان لو حد مش مسجل يشوف الصفحة الأساسية)
+    if (req.user) {
+        // لو هو المدرس صاحب الكورس أو أدمن
+        if (
+            course.instructor._id.toString() === req.user.id.toString() || 
+            req.user.role === "ADMIN"
+        ) {
+            isAuthorized = true;
+        } else {
+            // لو طالب، نشوف مشترك ولا لأ
+            const enrollment = await Enrollment.findOne({
+                user: req.user.id,
+                course: courseId,
+            });
+            if (enrollment) isAuthorized = true;
+        }
+    }
+
+    // نسخة من الكورس عشان نعدل عليها
+    let courseData = course.toObject();
+
+    // ✅ لو مش مصرح له، هنشيل لينكات الفيديوهات
+    if (!isAuthorized) {
+        if (courseData.sections) {
+            courseData.sections = courseData.sections.map((section) => ({
+                ...section,
+                videoUrl: undefined, // بنخفي الفيديو
+            }));
+        }
+    }
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { course: courseData, isAuthorized }, // بنبعت isAuthorized عشان الفرونت يعرف
+    });
 });
 
 const CreateCourse = asyncWrapper(async (req, res, next) => {
@@ -69,12 +111,29 @@ const CreateCourse = asyncWrapper(async (req, res, next) => {
     res.status(201).json({ status: httpStatusText.SUCCESS, data: { course: newCourse } });
 });
 
-const updateCourse = asyncWrapper(async (req, res) => {
+const updateCourse = asyncWrapper(async (req, res, next) => {
     const courseId = req.params.courseId;
+    
+    const course = await Course.findById(courseId);
+    if (!course) {
+        return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    }
+
+    // التأكد إن اللي بيعدل هو صاحب الكورس أو أدمن
+    if (course.instructor.toString() !== req.user.id.toString() && req.user.role !== 'ADMIN') {
+        return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
+    }
+
     const updateData = { ...req.body };
+
+    // لو المدرس رفع صورة جديدة، نحدث اللينك
     if (req.file) {
         updateData.thumbnail = req.file.secure_url || req.file.path;
     }
+
+    // تحويل الأسعار لأرقام لو جت كـ string
+    if (updateData.price) updateData.price = Number(updateData.price);
+    if (updateData.promotionalPrice) updateData.promotionalPrice = Number(updateData.promotionalPrice);
 
     const updatedCourse = await Course.findByIdAndUpdate(
         courseId,
@@ -82,7 +141,10 @@ const updateCourse = asyncWrapper(async (req, res) => {
         { new: true, runValidators: true }
     );
 
-    res.status(200).json({ status: httpStatusText.SUCCESS, data: { course: updatedCourse } });
+    res.status(200).json({ 
+        status: httpStatusText.SUCCESS, 
+        data: { course: updatedCourse } 
+    });
 });
 
 const deleteCourse = asyncWrapper(async (req, res) => {
@@ -147,6 +209,57 @@ const addSection = asyncWrapper(async (req, res, next) => {
     });
 });
 
+// ── تحديث قسم (لو عايز تعدل اسمه أو الفيديو) ──
+const updateSection = asyncWrapper(async (req, res, next) => {
+    const { courseId, sectionId } = req.params;
+    const course = await Course.findById(courseId);
+
+    if (!course) return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    if (course.instructor.toString() !== req.user.id && req.user.role !== 'ADMIN') {
+        return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
+    }
+
+    const section = course.sections.id(sectionId);
+    if (!section) return next(appError.create("Section not found", 404, httpStatusText.FAIL));
+
+    // تحديث البيانات (سواء نصية أو الفيديو لو اترفع جديد)
+    section.title = req.body.title || section.title;
+    section.learningObjective = req.body.learningObjective || section.learningObjective;
+    section.duration = req.body.duration || section.duration;
+    
+    // لو فيه فيديو جديد
+    if (req.file) {
+        section.videoUrl = req.file.secure_url || req.file.path;
+    }
+
+    await course.save();
+    res.status(200).json({ status: httpStatusText.SUCCESS, data: { course } });
+});
+
+
+// ── حذف قسم ──
+const deleteSection = asyncWrapper(async (req, res, next) => {
+    const { courseId, sectionId } = req.params;
+    const course = await Course.findById(courseId);
+
+    if (!course) return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    if (course.instructor.toString() !== req.user.id && req.user.role !== 'ADMIN') {
+        return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
+    }
+
+    // بنشيل القسم من المصفوفة
+    course.sections = course.sections.filter(
+        (sec) => sec._id.toString() !== sectionId
+    );
+
+    await course.save();
+    res.status(200).json({ status: httpStatusText.SUCCESS, data: { course } });
+});
+
+ // تأكد إنك مستورد الموديل ده
+
+
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
@@ -154,5 +267,7 @@ module.exports = {
     updateCourse,
     deleteCourse,
     enrollCourse,
-    addSection
+    addSection,
+    updateSection,
+    deleteSection
 };

@@ -3,7 +3,8 @@ const courseController = require("../controllers/courses.controllers");
 const verifyToken = require("../middlewares/verifyToken");
 const userRoles = require("../utils/userRoles");
 const allowedTo = require("../middlewares/allowedTo");
-const cloudinaryUpload = require ("../middlewares/cloudinaryUpload")
+const cloudinaryUpload = require ("../middlewares/cloudinaryUpload");
+const optionalAuth = require("../middlewares/optionalAuth");
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.route("/")
     );
 
 router.route("/:courseId")
-    .get(courseController.getSingleCourse)
+    .get(optionalAuth,courseController.getSingleCourse)
     .patch(
         verifyToken,
         allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
@@ -26,7 +27,7 @@ router.route("/:courseId")
     )
     .delete(
         verifyToken, 
-        allowedTo(userRoles.ADMIN), // الحذف للأدمن بس
+        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), // الحذف للأدمن بس
         courseController.deleteCourse
     );
 
@@ -43,5 +44,23 @@ router.route("/:courseId/enroll")
         cloudinaryUpload.single("video"), 
         courseController.addSection
     )
+
+
+router.route("/:courseId/sections/:sectionId") 
+    .delete(
+        verifyToken, 
+        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), 
+        courseController.deleteSection
+    )
+
+
+router.route("/:courseId/sections/:sectionId") 
+    .patch(
+        verifyToken, 
+        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
+        cloudinaryUpload.single("video"), // لو هيعدل الفيديو
+        courseController.updateSection
+    )
+
 
 module.exports = router;
