@@ -397,7 +397,38 @@ const getDashboardStats = asyncWrapper(async (req, res) => {
     });
 });
 
+const getInstructorStats = asyncWrapper(async (req, res) => {
+    const instructorId = req.user.id;
 
+    // 1. بنجيب كل الكورسات بتاعة المدرس
+    const courses = await Course.find({ instructor: instructorId });
+
+    const totalCourses = courses.length;
+    const courseIds = courses.map(course => course._id);
+
+    // 2. بنجيب عدد الطلاب المشتركين في كل الكورسات دي
+    const totalStudents = await Enrollment.countDocuments({ 
+        course: { $in: courseIds } 
+    });
+
+    // 3. بنحسب متوسط التقييمات
+    const reviews = await Review.find({ course: { $in: courseIds } });
+    let avgRating = 0;
+    if (reviews.length > 0) {
+        const totalRating = reviews.reduce((acc, item) => item.rating + acc, 0);
+        avgRating = (totalRating / reviews.length).toFixed(1);
+    }
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: {
+            totalCourses,
+            totalStudents,
+            avgRating,
+            courses // ممكن نبعت الكورسات كمان لو عايزين نعرضها
+        },
+    });
+});
 
 
 
@@ -413,5 +444,6 @@ module.exports = {
     updateSection,
     deleteSection,
     completeSection,
-    getDashboardStats
+    getDashboardStats,
+    getInstructorStats
 };
