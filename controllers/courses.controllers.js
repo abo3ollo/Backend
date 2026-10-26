@@ -56,7 +56,6 @@ const getAllCourse = asyncWrapper(async (req, res) => {
 const getSingleCourse = asyncWrapper(async (req, res, next) => {
     const courseId = req.params.courseId;
     
-    // بنجيب الكورس
     const course = await Course.findById(courseId).populate(
         "instructor", 
         "firstName lastName avatar"
@@ -67,41 +66,44 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
     }
 
     let isAuthorized = false;
+    let completedSections = [];
 
-    // لو فيه يوزر مسجل دخول (عشان لو حد مش مسجل يشوف الصفحة الأساسية)
     if (req.user) {
-        // لو هو المدرس صاحب الكورس أو أدمن
         if (
             course.instructor._id.toString() === req.user.id.toString() || 
             req.user.role === "ADMIN"
         ) {
             isAuthorized = true;
         } else {
-            // لو طالب، نشوف مشترك ولا لأ
+            // ✅ بنجيب الـ enrollment عشان نعرف هو مخلص إيه
             const enrollment = await Enrollment.findOne({
                 user: req.user.id,
                 course: courseId,
             });
-            if (enrollment) isAuthorized = true;
+            
+            if (enrollment) {
+                isAuthorized = true;
+                // ✅ بنبعت الأقسام المكتملة
+                completedSections = enrollment.completedSections; 
+            }
         }
     }
 
-    // نسخة من الكورس عشان نعدل عليها
     let courseData = course.toObject();
 
-    // ✅ لو مش مصرح له، هنشيل لينكات الفيديوهات
     if (!isAuthorized) {
         if (courseData.sections) {
             courseData.sections = courseData.sections.map((section) => ({
                 ...section,
-                videoUrl: undefined, // بنخفي الفيديو
+                videoUrl: undefined,
             }));
         }
     }
 
     res.status(200).json({
         status: httpStatusText.SUCCESS,
-        data: { course: courseData, isAuthorized }, // بنبعت isAuthorized عشان الفرونت يعرف
+        // ✅ ضفنا completedSections في الـ response
+        data: { course: courseData, isAuthorized, completedSections }, 
     });
 });
 
