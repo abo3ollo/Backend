@@ -4,6 +4,7 @@ const verifyToken = require("../middlewares/verifyToken");
 const cloudinaryUpload = require("../middlewares/cloudinaryUpload");
 
 const multer = require('multer');
+const userRoles = require("../utils/userRoles");
 const diskStorage = multer.diskStorage({
   destination: function (req, file, cb) { cb(null, 'uploads') },
   filename: function (req, file, cb) {
@@ -17,7 +18,7 @@ const upload = multer({ storage: diskStorage });
 const router = express.Router();
 
 router.route("/")
-            .get(verifyToken, usersController.getAllusers)
+            .get(verifyToken, allowedto(userRoles.ADMIN), usersController.getAllusers)
     
 router.route("/me")
             .get(verifyToken, usersController.getMe)
@@ -28,5 +29,11 @@ router.route("/me/password")
 
 router.route("/me/avatar")
             .post(verifyToken, cloudinaryUpload.single("avatar"), usersController.uploadAvatar)
+
+router.route("/:userId/role")
+            .patch(verifyToken, allowedTo(userRoles.ADMIN), usersController.updateUserRole);
+
+router.route("/:userId")
+            .delete(verifyToken, allowedTo(userRoles.ADMIN), usersController.deleteUser);
 
 module.exports = router 

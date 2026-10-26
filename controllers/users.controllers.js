@@ -107,11 +107,61 @@ const uploadAvatar = asyncWrapper(async (req, res, next) => {
     });
 });
 
+// ── Update User Role (Admin) ──
+const updateUserRole = asyncWrapper(async (req, res, next) => {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    // تأكد إن الـ role صالح (بناءً على الـ enum اللي في الموديل)
+    const validRoles = ["USER", "INSTRUCTOR", "ADMIN"];
+    if (!validRoles.includes(role)) {
+        return next(appError.create("Invalid role", 400, httpStatusText.FAIL));
+    }
+
+    const user = await User.findByIdAndUpdate(
+        userId,
+        { role },
+        { new: true, runValidators: true }
+    );
+
+    if (!user) {
+        return next(appError.create("User not found", 404, httpStatusText.FAIL));
+    }
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { user },
+    });
+});
+
+// ── Delete User (Admin) ──
+const deleteUser = asyncWrapper(async (req, res, next) => {
+    const { userId } = req.params;
+
+    // منع الأدمن إنه يمسح نفسه
+    if (userId === req.user.id.toString()) {
+        return next(appError.create("You cannot delete your own account", 400, httpStatusText.FAIL));
+    }
+
+    const user = await User.findByIdAndDelete(userId);
+
+    if (!user) {
+        return next(appError.create("User not found", 404, httpStatusText.FAIL));
+    }
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: "User deleted successfully"
+    });
+});
+
 
 module.exports = {
     getAllusers,
     getMe,
     updateMe,
     changePassword,
-    uploadAvatar
+    uploadAvatar,
+    updateUserRole,
+    deleteUser,
 }
