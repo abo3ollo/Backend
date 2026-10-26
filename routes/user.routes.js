@@ -2,6 +2,7 @@ const express = require("express");
 const usersController = require("../controllers/users.controllers");
 const verifyToken = require("../middlewares/verifyToken");
 const cloudinaryUpload = require("../middlewares/cloudinaryUpload");
+const allowedTo = require("../middlewares/allowedTo");
 
 const multer = require('multer');
 const userRoles = require("../utils/userRoles");
@@ -18,7 +19,7 @@ const upload = multer({ storage: diskStorage });
 const router = express.Router();
 
 router.route("/")
-            .get(verifyToken, allowedto(userRoles.ADMIN), usersController.getAllusers)
+            .get(verifyToken, allowedTo(userRoles.ADMIN), usersController.getAllusers)
     
 router.route("/me")
             .get(verifyToken, usersController.getMe)
