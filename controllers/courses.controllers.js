@@ -349,6 +349,55 @@ const completeSection = asyncWrapper(async (req, res, next) => {
 });
 
 
+const getDashboardStats = asyncWrapper(async (req, res) => {
+    // 1. بنجيب كل الكورسات اللي الطالب مشترك فيها
+    const enrollments = await Enrollment.find({ user: req.user.id })
+        .populate({
+            path: "course",
+            populate: {
+                path: "instructor",
+                select: "firstName lastName avatar",
+            },
+        })
+        .sort({ updatedAt: -1 }); // بنجيب الأحدث الأول
+
+    let completedCoursesCount = 0;
+    let continueLearningCourse = null;
+
+    // 2. بنحسب الإحصائيات
+    enrollments.forEach((enrollment) => {
+        const course = enrollment.course;
+        if (!course) return;
+
+        const totalSections = course.sections ? course.sections.length : 0;
+        const completedCount = enrollment.completedSections.length;
+
+        // لو عدد الأقسام المكتملة يساوي كل الأقسام (وكمان الكورس فيه أقسام)
+        if (totalSections > 0 && completedCount === totalSections) {
+            completedCoursesCount++;
+        } else if (!continueLearningCourse) {
+            // أول كورس مش مكتمل (وهو الأحدث بفضل الـ sort) هنخليه للـ Continue Learning
+            const progress = totalSections === 0 ? 0 : Math.round((completedCount / totalSections) * 100);
+            continueLearningCourse = {
+                ...course.toObject(),
+                progress,
+                completedCount,
+                totalSections
+            };
+        }
+    });
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: {
+            enrolledCount: enrollments.length,
+            completedCount: completedCoursesCount,
+            continueLearningCourse, // ممكن يكون null لو كل الكورسات مكتملة أو مفيش كورسات
+        },
+    });
+});
+
+
 
 
 
@@ -363,5 +412,6 @@ module.exports = {
     addSection,
     updateSection,
     deleteSection,
-    completeSection
+    completeSection,
+    getDashboardStats
 };

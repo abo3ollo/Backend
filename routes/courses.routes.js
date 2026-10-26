@@ -71,4 +71,11 @@ router.route("/:courseId/sections/:sectionId/complete")
         courseController.completeSection
     );
 
+router.route("/dashboard-stats")
+    .get(
+        verifyToken,
+        allowedTo(userRoles.ADMIN),
+        courseController.getDashboardStats
+    );
+
 module.exports = router;
