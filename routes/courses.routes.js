@@ -74,7 +74,6 @@ router.route("/:courseId/sections/:sectionId/complete")
 router.route("/dashboard-stats")
     .get(
         verifyToken,
-        allowedTo(userRoles.ADMIN),
         courseController.getDashboardStats
     );
 
