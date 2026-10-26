@@ -3,34 +3,39 @@ const courseController = require("../controllers/courses.controllers");
 const verifyToken = require("../middlewares/verifyToken");
 const userRoles = require("../utils/userRoles");
 const allowedTo = require("../middlewares/allowedTo");
-const cloudinaryUpload = require ("../middlewares/cloudinaryUpload");
+const cloudinaryUpload = require("../middlewares/cloudinaryUpload");
 const optionalAuth = require("../middlewares/optionalAuth");
 
 const router = express.Router();
 
+// 1️⃣ المسارات الثابتة (لازم تكون فوق خالص)
+router.route("/my-courses")
+    .get(verifyToken, courseController.getMyCourses);
+
+router.route("/dashboard-stats")
+    .get(verifyToken, courseController.getDashboardStats);
+
+// 2️⃣ المسارات اللي بتستخدم الـ /:courseId
 router.route("/")
     .get(courseController.getAllCourse)
     .post(
         verifyToken, 
-        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), // بس المدرس أو الأدمن
-        cloudinaryUpload.single("thumbnail"), // 👈 استقبال الصورة
+        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
+        cloudinaryUpload.single("thumbnail"),
         courseController.CreateCourse
     );
-    
-router.route("/my-courses")
-    .get(verifyToken, courseController.getMyCourses);
 
 router.route("/:courseId")
-    .get(optionalAuth,courseController.getSingleCourse)
+    .get(optionalAuth, courseController.getSingleCourse)
     .patch(
         verifyToken,
         allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
-        cloudinaryUpload.single("thumbnail"), // 👈 استقبال الصورة لو هيتعدل
+        cloudinaryUpload.single("thumbnail"),
         courseController.updateCourse
     )
     .delete(
         verifyToken, 
-        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), // الحذف للأدمن بس
+        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
         courseController.deleteCourse
     );
 
@@ -43,11 +48,10 @@ router.route("/:courseId/enroll")
 router.route("/:courseId/sections")
     .post(
         verifyToken,
-        allowedTo(userRoles.INSTRUCTOR,userRoles.ADMIN),
+        allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
         cloudinaryUpload.single("video"), 
         courseController.addSection
-    )
-
+    );
 
 router.route("/:courseId/sections/:sectionId") 
     .delete(
@@ -55,26 +59,17 @@ router.route("/:courseId/sections/:sectionId")
         allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), 
         courseController.deleteSection
     )
-
-
-router.route("/:courseId/sections/:sectionId") 
     .patch(
         verifyToken, 
         allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
-        cloudinaryUpload.single("video"), // لو هيعدل الفيديو
+        cloudinaryUpload.single("video"),
         courseController.updateSection
-    )
+    );
 
 router.route("/:courseId/sections/:sectionId/complete")
     .post(
         verifyToken,
         courseController.completeSection
-    );
-
-router.route("/dashboard-stats")
-    .get(
-        verifyToken,
-        courseController.getDashboardStats
     );
 
 module.exports = router;
