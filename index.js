@@ -93,6 +93,10 @@ app.use("/api/auth", authRouter);
 const reviewsRouter = require("./routes/reviews.routes");
 app.use("/api/courses/:courseId/reviews", reviewsRouter);
 
+// Notifications routes
+const notificationsRouter = require("./routes/notifications.routes");
+app.use("/api/notifications", notificationsRouter);
+
 // 404 handler
 app.all(/.*/, (req, res) => {
   return res.status(404).json({

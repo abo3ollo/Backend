@@ -3,6 +3,8 @@ const httpStatusText = require("../utils/httpStatusText");
 const appError = require('../utils/appError');
 const asyncWrapper = require("../middlewares/asyncWrapper");
 const Enrollment = require("../models/enrollment.models"); 
+const Review = require("../models/review.models");
+const Notification = require("../models/notification.models"); 
 
 
 const getAllCourse = asyncWrapper(async (req, res) => {
@@ -230,16 +232,23 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
     }
 
-    // التأكد إن المستخدم مش متسجل بالفعل
     const existingEnrollment = await Enrollment.findOne({ user: userId, course: courseId });
     if (existingEnrollment) {
         return next(appError.create("You are already enrolled in this course", 400, httpStatusText.FAIL));
     }
 
-    // إنشاء التسجيل
     const enrollment = await Enrollment.create({
         user: userId,
         course: courseId,
+    });
+
+    // ✅ ضيف كود الإشعار هنا
+    await Notification.create({
+        recipient: course.instructor,
+        sender: req.user.id,
+        type: "enrollment",
+        message: `${req.user.firstName || "A student"} enrolled in your course "${course.title}"`,
+        link: `/courses/${courseId}`,
     });
 
     res.status(201).json({
