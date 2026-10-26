@@ -41,23 +41,32 @@ const courseSchema = new mongoose.Schema(
 
     // ✅ جديد: هيكل الأقسام والدروس
     sections: [
-  {
-    title: { type: String, required: true },
-    learningObjective: { type: String }, // ✅ جديد
-    introVideoTitle: { type: String },   // ✅ جديد
-    duration: { type: String },          // ✅ جديد
-    videoUrl: { type: String },          // ✅ جديد
-    isFreePreview: { type: Boolean, default: false }, // ✅ جديد
-    isDraft: { type: Boolean, default: false },       // ✅ جديد
-    lessons: [
       {
         title: { type: String, required: true },
-        duration: { type: String },
-        videoUrl: { type: String },
-      }
-    ]
-  }
-]
+        learningObjective: { type: String }, // ✅ جديد
+        introVideoTitle: { type: String }, // ✅ جديد
+        duration: { type: String }, // ✅ جديد
+        videoUrl: { type: String }, // ✅ جديد
+        isFreePreview: { type: Boolean, default: false }, // ✅ جديد
+        isDraft: { type: Boolean, default: false }, // ✅ جديد
+        lessons: [
+          {
+            title: { type: String, required: true },
+            duration: { type: String },
+            videoUrl: { type: String },
+          },
+        ],
+      },
+    ],
+
+    ratingsAverage: {
+      type: Number,
+      default: 4.5,
+    },
+    ratingsQuantity: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true },
 );

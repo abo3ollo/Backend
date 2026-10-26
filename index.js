@@ -89,6 +89,10 @@ app.use("/api/users", userRouter);
 const authRouter = require("./routes/auth.routes");
 app.use("/api/auth", authRouter);
 
+// Reviews routes
+const reviewsRouter = require("./routes/reviews.routes");
+app.use("/api/courses/:courseId/reviews", reviewsRouter);
+
 // 404 handler
 app.all(/.*/, (req, res) => {
   return res.status(404).json({
