@@ -6,17 +6,51 @@ const Enrollment = require("../models/enrollment.models");
 
 
 const getAllCourse = asyncWrapper(async (req, res) => {
-    const query = req.query;
-    const limit = query.limit || 10;
-    const page = query.page || 1;
+    const queryObj = { ...req.query };
+    
+    // 1. شيل الحقول اللي مش بنفلتر بيها من الـ query
+    const excludedFields = ["page", "sort", "limit", "fields", "search"];
+    excludedFields.forEach((el) => delete queryObj[el]);
+
+    // 2. فلترة الحقول العادية (زي category, level)
+    let queryStr = JSON.stringify(queryObj);
+    // تحويل العمليات زي gte, lte, gt, lt لصيغة Mongoose ($gte, $lte...)
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+    
+    let query = Course.find(JSON.parse(queryStr));
+
+    // 3. البحث بالكلمة المفتاحية (Search by title)
+    if (req.query.search) {
+        query = query.find({
+            title: { $regex: req.query.search, $options: "i" },
+        });
+    }
+
+    // 4. الترتيب (Sorting)
+    if (req.query.sort) {
+        const sortBy = req.query.sort.split(",").join(" ");
+        query = query.sort(sortBy);
+    } else {
+        query = query.sort("-createdAt"); // الافتراضي: الأحدث الأول
+    }
+
+    // 5. التقسيم لصفحات (Pagination)
+    const limit = req.query.limit * 1 || 12;
+    const page = req.query.page * 1 || 1;
     const skip = (page - 1) * limit;
 
-    const courses = await Course.find({}, { "__v": false })
-        .populate("instructor", "firstName lastName avatar")
-        .limit(limit)
-        .skip(skip);
+    query = query.skip(skip).limit(limit);
 
-    res.json({ status: httpStatusText.SUCCESS, data: { courses } });
+    // 6. جلب بيانات المدرس مع الكورس
+    query = query.populate("instructor", "firstName lastName avatar");
+
+    const courses = await query;
+
+    res.status(200).json({ 
+        status: httpStatusText.SUCCESS, 
+        results: courses.length,
+        data: { courses } 
+    });
 });
 
 const getSingleCourse = asyncWrapper(async (req, res, next) => {
