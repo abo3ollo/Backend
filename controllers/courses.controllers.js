@@ -106,7 +106,6 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
 });
 
 const getMyCourses = asyncWrapper(async (req, res, next) => {
-    // بنجيب كل الكورسات اللي الطالب ده مشترك فيها
     const enrollments = await Enrollment.find({ user: req.user.id })
         .populate({
             path: "course",
@@ -116,8 +115,21 @@ const getMyCourses = asyncWrapper(async (req, res, next) => {
             },
         });
 
-    // بنستخرج الكورسات بس من الـ Enrollments
-    const courses = enrollments.map((enrollment) => enrollment.course);
+    // ✅ بنحسب نسبة التقدم لكل كورس
+    const courses = enrollments.map((enrollment) => {
+        const course = enrollment.course.toObject();
+        const totalSections = course.sections ? course.sections.length : 0;
+        const completedCount = enrollment.completedSections.length;
+        
+        const progress = totalSections === 0 ? 0 : Math.round((completedCount / totalSections) * 100);
+
+        return {
+            ...course,
+            progress, // النسبة المئوية
+            completedCount,
+            totalSections
+        };
+    });
 
     res.status(200).json({
         status: httpStatusText.SUCCESS,
@@ -311,6 +323,29 @@ const deleteSection = asyncWrapper(async (req, res, next) => {
     res.status(200).json({ status: httpStatusText.SUCCESS, data: { course } });
 });
 
+const completeSection = asyncWrapper(async (req, res, next) => {
+    const { courseId, sectionId } = req.params;
+    const userId = req.user.id;
+
+    // 1. التأكد إن الطالب مشترك
+    const enrollment = await Enrollment.findOne({ user: userId, course: courseId });
+    if (!enrollment) {
+        return next(appError.create("You are not enrolled in this course", 403, httpStatusText.FAIL));
+    }
+
+    // 2. التأكد إنه مش مكرر
+    if (!enrollment.completedSections.includes(sectionId)) {
+        enrollment.completedSections.push(sectionId);
+        await enrollment.save();
+    }
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: "Section marked as completed",
+        data: { completedSections: enrollment.completedSections },
+    });
+});
+
 
 
 
@@ -325,5 +360,6 @@ module.exports = {
     enrollCourse,
     addSection,
     updateSection,
-    deleteSection
+    deleteSection,
+    completeSection
 };

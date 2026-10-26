@@ -65,5 +65,10 @@ router.route("/:courseId/sections/:sectionId")
         courseController.updateSection
     )
 
+router.route("/:courseId/sections/:sectionId/complete")
+    .post(
+        verifyToken,
+        courseController.completeSection
+    );
 
 module.exports = router;
