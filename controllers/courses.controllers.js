@@ -5,6 +5,7 @@ const asyncWrapper = require("../middlewares/asyncWrapper");
 const Enrollment = require("../models/enrollment.models");
 const Review = require("../models/review.models");
 const Notification = require("../models/notification.models");
+const User = require("../models/user.models"); 
 
 const getAllCourse = asyncWrapper(async (req, res) => {
     const queryObj = { ...req.query };
@@ -471,6 +472,30 @@ const getDashboardStats = asyncWrapper(async (req, res) => {
     });
 });
 
+const getAdminStats = asyncWrapper(async (req, res) => {
+    const totalUsers = await User.countDocuments({ role: "USER" });
+    const totalInstructors = await User.countDocuments({ role: "INSTRUCTOR" });
+    const totalCourses = await Course.countDocuments();
+
+    // بنجيب كل الاشتراكات اللي اتدفعت واتوافق عليها عشان نحسب أرباح المنصة
+    const approvedEnrollments = await Enrollment.find({ paymentStatus: "approved" });
+    
+    let platformRevenue = 0;
+    approvedEnrollments.forEach((enrollment) => {
+        platformRevenue += enrollment.platformFee;
+    });
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: {
+            totalUsers,
+            totalInstructors,
+            totalCourses,
+            platformRevenue,
+        },
+    });
+});
+
 const getInstructorStats = asyncWrapper(async (req, res) => {
     const instructorId = req.user.id;
 
@@ -580,6 +605,7 @@ module.exports = {
     deleteSection,
     completeSection,
     getDashboardStats,
+    getAdminStats,
     getInstructorStats,
     getPendingEnrollments,
     updateEnrollmentStatus,

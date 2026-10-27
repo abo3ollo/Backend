@@ -19,6 +19,10 @@ router.route("/dashboard-stats")
 router.route("/instructor-stats")
     .get(verifyToken,allowedTo(userRoles.INSTRUCTOR , userRoles.ADMIN), courseController.getInstructorStats);
 
+
+router.route("/admin/dashboard-stats")
+    .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getAdminStats);    
+
 // 2️⃣ المسارات اللي بتستخدم الـ /:courseId
 router.route("/")
     .get(courseController.getAllCourse)
