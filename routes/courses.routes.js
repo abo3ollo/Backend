@@ -8,22 +8,36 @@ const optionalAuth = require("../middlewares/optionalAuth");
 
 const router = express.Router();
 
+// ==========================================
 // 1️⃣ المسارات الثابتة (لازم تكون فوق خالص)
+// ==========================================
+
 router.route("/my-courses")
     .get(verifyToken, courseController.getMyCourses);
 
 router.route("/dashboard-stats")
     .get(verifyToken, courseController.getDashboardStats);
 
-    
 router.route("/instructor-stats")
-    .get(verifyToken,allowedTo(userRoles.INSTRUCTOR , userRoles.ADMIN), courseController.getInstructorStats);
+    .get(verifyToken, allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), courseController.getInstructorStats);
 
+router.route("/instructor/revenue")
+    .get(verifyToken, allowedTo(userRoles.INSTRUCTOR), courseController.getInstructorRevenue);
 
 router.route("/admin/dashboard-stats")
-    .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getAdminStats);    
+    .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getAdminStats);
 
+router.route("/admin/pending-enrollments")
+    .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getPendingEnrollments);
+
+router.route("/admin/enrollments/:enrollmentId")
+    .patch(verifyToken, allowedTo(userRoles.ADMIN), courseController.updateEnrollmentStatus);
+
+
+// ==========================================
 // 2️⃣ المسارات اللي بتستخدم الـ /:courseId
+// ==========================================
+
 router.route("/")
     .get(courseController.getAllCourse)
     .post(
@@ -79,28 +93,6 @@ router.route("/:courseId/sections/:sectionId/complete")
     .post(
         verifyToken,
         courseController.completeSection
-    );
-
-// courses.routes.js
-router.route("/admin/pending-enrollments")
-    .get(
-        verifyToken, 
-        allowedTo(userRoles.ADMIN), 
-        courseController.getPendingEnrollments
-    );
-
-router.route("/admin/enrollments/:enrollmentId")
-    .patch(
-        verifyToken,
-        allowedTo(userRoles.ADMIN),
-        courseController.updateEnrollmentStatus
-    );
-    
-router.route("/instructor/revenue")
-    .get(
-        verifyToken,
-        allowedTo(userRoles.INSTRUCTOR),
-        courseController.getInstructorRevenue
     );
 
 module.exports = router;
