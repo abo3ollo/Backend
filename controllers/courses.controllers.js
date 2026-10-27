@@ -121,24 +121,22 @@ const getMyCourses = asyncWrapper(async (req, res, next) => {
         },
     });
 
-    // ✅ بنحسب نسبة التقدم لكل كورس
     const courses = enrollments.map((enrollment) => {
+        if (!enrollment.course) return null; // لو الكورس اتمسح
+        
         const course = enrollment.course.toObject();
         const totalSections = course.sections ? course.sections.length : 0;
         const completedCount = enrollment.completedSections.length;
-
-        const progress =
-            totalSections === 0
-                ? 0
-                : Math.round((completedCount / totalSections) * 100);
+        const progress = totalSections === 0 ? 0 : Math.round((completedCount / totalSections) * 100);
 
         return {
             ...course,
-            progress, // النسبة المئوية
+            progress,
             completedCount,
             totalSections,
+            paymentStatus: enrollment.paymentStatus, // ✅ بنبعت حالة الدفع
         };
-    });
+    }).filter(Boolean);
 
     res.status(200).json({
         status: httpStatusText.SUCCESS,
