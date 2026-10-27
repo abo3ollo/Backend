@@ -69,6 +69,7 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
 
     let isAuthorized = false;
     let completedSections = [];
+    let enrollmentStatus = null;
 
     if (req.user) {
         if (
@@ -84,6 +85,7 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
             });
 
             if (enrollment) {
+                enrollmentStatus = enrollment.paymentStatus;
                 if (enrollment.paymentStatus === "approved") {
                     isAuthorized = true;
                     completedSections = enrollment.completedSections;
@@ -106,7 +108,7 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
     res.status(200).json({
         status: httpStatusText.SUCCESS,
         // ✅ ضفنا completedSections في الـ response
-        data: { course: courseData, isAuthorized, completedSections },
+        data: { course: courseData, isAuthorized, completedSections , enrollmentStatus },
     });
 });
 
@@ -249,40 +251,48 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
     if (!course)
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
 
-    // التأكد إن المستخدم مش متسجل بالفعل
+    // ✅ التأكد إن المستخدم مش متسجل بالفعل أو عنده طلب معلق
     const existingEnrollment = await Enrollment.findOne({
         user: userId,
         course: courseId,
     });
+
     if (existingEnrollment) {
-        return next(
-            appError.create(
-                "You are already enrolled in this course",
-                400,
-                httpStatusText.FAIL,
-            ),
-        );
+        if (existingEnrollment.paymentStatus === "pending") {
+            return next(
+                appError.create(
+                    "Your enrollment request is already pending. Please wait for admin approval.",
+                    400,
+                    httpStatusText.FAIL
+                )
+            );
+        }
+        if (existingEnrollment.paymentStatus === "approved") {
+            return next(
+                appError.create(
+                    "You are already enrolled in this course.",
+                    400,
+                    httpStatusText.FAIL
+                )
+            );
+        }
+        if (existingEnrollment.paymentStatus === "rejected") {
+             // لو الطالب اترفض قبل كده، بنسمحله يرفع إيصال تاني (بنمسح القديم أو بنعدله)
+             // الأسهل: نمسح الطلب القديم المرفوض ونكمل عشان ينشئ واحد جديد
+             await Enrollment.findByIdAndDelete(existingEnrollment._id);
+        }
     }
 
-    // ✅ لازم يكون فيه إيصال دفع
+    // ... باقي كود رفع الإيصال زي ما هو
     if (!req.file) {
-        return next(
-            appError.create(
-                "Please upload a payment receipt",
-                400,
-                httpStatusText.FAIL,
-            ),
-        );
+        return next(appError.create("Please upload a payment receipt", 400, httpStatusText.FAIL));
     }
 
-    const receiptImage = req.file.path; // من Cloudinary
-
-    // ✅ حساب النسب (15% للمنصة، 85% للمدرس)
+    const receiptImage = req.file.path;
     const amountPaid = course.price;
     const platformFee = amountPaid * 0.15;
     const instructorEarnings = amountPaid - platformFee;
 
-    // إنشاء التسجيل بحالة "معلق" (pending)
     const enrollment = await Enrollment.create({
         user: userId,
         course: courseId,
@@ -290,13 +300,12 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
         amountPaid,
         platformFee,
         instructorEarnings,
-        paymentStatus: "pending", // مستني موافقة الأدمن
+        paymentStatus: "pending",
     });
 
     res.status(201).json({
         status: httpStatusText.SUCCESS,
-        message:
-            "Enrollment submitted successfully! Please wait for admin approval.",
+        message: "Enrollment submitted successfully! Please wait for admin approval.",
         data: { enrollment },
     });
 });
