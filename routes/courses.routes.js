@@ -46,6 +46,7 @@ router.route("/:courseId")
 router.route("/:courseId/enroll")
     .post(
         verifyToken, 
+        cloudinaryUpload.single("receipt"), 
         courseController.enrollCourse
     );
 
@@ -74,6 +75,28 @@ router.route("/:courseId/sections/:sectionId/complete")
     .post(
         verifyToken,
         courseController.completeSection
+    );
+
+// courses.routes.js
+router.route("/admin/pending-enrollments")
+    .get(
+        verifyToken, 
+        allowedTo(userRoles.ADMIN), 
+        courseController.getPendingEnrollments
+    );
+
+router.route("/admin/enrollments/:enrollmentId")
+    .patch(
+        verifyToken,
+        allowedTo(userRoles.ADMIN),
+        courseController.updateEnrollmentStatus
+    );
+    
+router.route("/instructor/revenue")
+    .get(
+        verifyToken,
+        allowedTo(userRoles.INSTRUCTOR),
+        courseController.getInstructorRevenue
     );
 
 module.exports = router;

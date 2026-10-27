@@ -2,21 +2,26 @@ const mongoose = require("mongoose");
 
 const enrollmentSchema = new mongoose.Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
+    completedSections: [{ type: mongoose.Schema.Types.ObjectId }],
+    
+    // ✅ حقول الدفع الجديدة
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending", // الطالب بيدفع، فبيبقى معلق لحد ما الأدمن يوافق
+    },
+    receiptImage: {
+      type: String, // لينك صورة الإيصال من Cloudinary
+    },
+    amountPaid: {
+      type: Number,
       required: true,
     },
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      required: true,
-    },
-    completedSections: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-      }
-    ],
+    // نسبة المنصة (15%) والمدرس (85%)
+    platformFee: { type: Number },
+    instructorEarnings: { type: Number },
   },
   { timestamps: true }
 );

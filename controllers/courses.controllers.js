@@ -1,15 +1,14 @@
 const Course = require("../models/courses.models");
 const httpStatusText = require("../utils/httpStatusText");
-const appError = require('../utils/appError');
+const appError = require("../utils/appError");
 const asyncWrapper = require("../middlewares/asyncWrapper");
-const Enrollment = require("../models/enrollment.models"); 
+const Enrollment = require("../models/enrollment.models");
 const Review = require("../models/review.models");
-const Notification = require("../models/notification.models"); 
-
+const Notification = require("../models/notification.models");
 
 const getAllCourse = asyncWrapper(async (req, res) => {
     const queryObj = { ...req.query };
-    
+
     // 1. شيل الحقول اللي مش بنفلتر بيها من الـ query
     const excludedFields = ["page", "sort", "limit", "fields", "search"];
     excludedFields.forEach((el) => delete queryObj[el]);
@@ -18,7 +17,7 @@ const getAllCourse = asyncWrapper(async (req, res) => {
     let queryStr = JSON.stringify(queryObj);
     // تحويل العمليات زي gte, lte, gt, lt لصيغة Mongoose ($gte, $lte...)
     queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
-    
+
     let query = Course.find(JSON.parse(queryStr));
 
     // 3. البحث بالكلمة المفتاحية (Search by title)
@@ -48,19 +47,19 @@ const getAllCourse = asyncWrapper(async (req, res) => {
 
     const courses = await query;
 
-    res.status(200).json({ 
-        status: httpStatusText.SUCCESS, 
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
         results: courses.length,
-        data: { courses } 
+        data: { courses },
     });
 });
 
 const getSingleCourse = asyncWrapper(async (req, res, next) => {
     const courseId = req.params.courseId;
-    
+
     const course = await Course.findById(courseId).populate(
-        "instructor", 
-        "firstName lastName avatar"
+        "instructor",
+        "firstName lastName avatar",
     );
 
     if (!course) {
@@ -72,7 +71,7 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
 
     if (req.user) {
         if (
-            course.instructor._id.toString() === req.user.id.toString() || 
+            course.instructor._id.toString() === req.user.id.toString() ||
             req.user.role === "ADMIN"
         ) {
             isAuthorized = true;
@@ -82,11 +81,12 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
                 user: req.user.id,
                 course: courseId,
             });
-            
+
             if (enrollment) {
-                isAuthorized = true;
-                // ✅ بنبعت الأقسام المكتملة
-                completedSections = enrollment.completedSections; 
+                if (enrollment.paymentStatus === "approved") {
+                    isAuthorized = true;
+                    completedSections = enrollment.completedSections;
+                }
             }
         }
     }
@@ -105,33 +105,35 @@ const getSingleCourse = asyncWrapper(async (req, res, next) => {
     res.status(200).json({
         status: httpStatusText.SUCCESS,
         // ✅ ضفنا completedSections في الـ response
-        data: { course: courseData, isAuthorized, completedSections }, 
+        data: { course: courseData, isAuthorized, completedSections },
     });
 });
 
 const getMyCourses = asyncWrapper(async (req, res, next) => {
-    const enrollments = await Enrollment.find({ user: req.user.id })
-        .populate({
-            path: "course",
-            populate: {
-                path: "instructor",
-                select: "firstName lastName avatar",
-            },
-        });
+    const enrollments = await Enrollment.find({ user: req.user.id }).populate({
+        path: "course",
+        populate: {
+            path: "instructor",
+            select: "firstName lastName avatar",
+        },
+    });
 
     // ✅ بنحسب نسبة التقدم لكل كورس
     const courses = enrollments.map((enrollment) => {
         const course = enrollment.course.toObject();
         const totalSections = course.sections ? course.sections.length : 0;
         const completedCount = enrollment.completedSections.length;
-        
-        const progress = totalSections === 0 ? 0 : Math.round((completedCount / totalSections) * 100);
+
+        const progress =
+            totalSections === 0
+                ? 0
+                : Math.round((completedCount / totalSections) * 100);
 
         return {
             ...course,
             progress, // النسبة المئوية
             completedCount,
-            totalSections
+            totalSections,
         };
     });
 
@@ -144,13 +146,22 @@ const getMyCourses = asyncWrapper(async (req, res, next) => {
 
 const CreateCourse = asyncWrapper(async (req, res, next) => {
     // ✅ استقبلنا الحقول الجديدة كلها
-    const { 
-        title, description, price, category, level, isPublished,
-        subtitle, language, promoVideo, promotionalPrice, sections 
+    const {
+        title,
+        description,
+        price,
+        category,
+        level,
+        isPublished,
+        subtitle,
+        language,
+        promoVideo,
+        promotionalPrice,
+        sections,
     } = req.body;
 
-    const thumbnail = req.file 
-        ? (req.file.secure_url || req.file.path) 
+    const thumbnail = req.file
+        ? req.file.secure_url || req.file.path
         : "https://res.cloudinary.com/demo/image/upload/default-course.jpg";
 
     // ✅ بنعمل parse للـ sections لأنها بتيجي كـ String من الـ FormData
@@ -173,25 +184,30 @@ const CreateCourse = asyncWrapper(async (req, res, next) => {
         language,
         promoVideo,
         promotionalPrice: promotionalPrice ? Number(promotionalPrice) : undefined,
-        isPublished: isPublished === 'true' || isPublished === true,
+        isPublished: isPublished === "true" || isPublished === true,
         thumbnail,
         instructor: req.user.id,
         sections: parsedSections, // ✅ حفظ الأقسام
     });
 
-    res.status(201).json({ status: httpStatusText.SUCCESS, data: { course: newCourse } });
+    res
+        .status(201)
+        .json({ status: httpStatusText.SUCCESS, data: { course: newCourse } });
 });
 
 const updateCourse = asyncWrapper(async (req, res, next) => {
     const courseId = req.params.courseId;
-    
+
     const course = await Course.findById(courseId);
     if (!course) {
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
     }
 
     // التأكد إن اللي بيعدل هو صاحب الكورس أو أدمن
-    if (course.instructor.toString() !== req.user.id.toString() && req.user.role !== 'ADMIN') {
+    if (
+        course.instructor.toString() !== req.user.id.toString() &&
+        req.user.role !== "ADMIN"
+    ) {
         return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
     }
 
@@ -204,17 +220,18 @@ const updateCourse = asyncWrapper(async (req, res, next) => {
 
     // تحويل الأسعار لأرقام لو جت كـ string
     if (updateData.price) updateData.price = Number(updateData.price);
-    if (updateData.promotionalPrice) updateData.promotionalPrice = Number(updateData.promotionalPrice);
+    if (updateData.promotionalPrice)
+        updateData.promotionalPrice = Number(updateData.promotionalPrice);
 
     const updatedCourse = await Course.findByIdAndUpdate(
         courseId,
         { $set: updateData },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
     );
 
-    res.status(200).json({ 
-        status: httpStatusText.SUCCESS, 
-        data: { course: updatedCourse } 
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { course: updatedCourse },
     });
 });
 
@@ -228,32 +245,57 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
     const userId = req.user.id;
 
     const course = await Course.findById(courseId);
-    if (!course) {
+    if (!course)
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
-    }
 
-    const existingEnrollment = await Enrollment.findOne({ user: userId, course: courseId });
-    if (existingEnrollment) {
-        return next(appError.create("You are already enrolled in this course", 400, httpStatusText.FAIL));
-    }
-
-    const enrollment = await Enrollment.create({
+    // التأكد إن المستخدم مش متسجل بالفعل
+    const existingEnrollment = await Enrollment.findOne({
         user: userId,
         course: courseId,
     });
+    if (existingEnrollment) {
+        return next(
+            appError.create(
+                "You are already enrolled in this course",
+                400,
+                httpStatusText.FAIL,
+            ),
+        );
+    }
 
-    // ✅ ضيف كود الإشعار هنا
-    await Notification.create({
-        recipient: course.instructor,
-        sender: req.user.id,
-        type: "enrollment",
-        message: `${req.user.firstName || "A student"} enrolled in your course "${course.title}"`,
-        link: `/courses/${courseId}`,
+    // ✅ لازم يكون فيه إيصال دفع
+    if (!req.file) {
+        return next(
+            appError.create(
+                "Please upload a payment receipt",
+                400,
+                httpStatusText.FAIL,
+            ),
+        );
+    }
+
+    const receiptImage = req.file.path; // من Cloudinary
+
+    // ✅ حساب النسب (15% للمنصة، 85% للمدرس)
+    const amountPaid = course.price;
+    const platformFee = amountPaid * 0.15;
+    const instructorEarnings = amountPaid - platformFee;
+
+    // إنشاء التسجيل بحالة "معلق" (pending)
+    const enrollment = await Enrollment.create({
+        user: userId,
+        course: courseId,
+        receiptImage,
+        amountPaid,
+        platformFee,
+        instructorEarnings,
+        paymentStatus: "pending", // مستني موافقة الأدمن
     });
 
     res.status(201).json({
         status: httpStatusText.SUCCESS,
-        message: "Enrolled successfully!",
+        message:
+            "Enrollment submitted successfully! Please wait for admin approval.",
         data: { enrollment },
     });
 });
@@ -261,12 +303,15 @@ const enrollCourse = asyncWrapper(async (req, res, next) => {
 const addSection = asyncWrapper(async (req, res, next) => {
     const courseId = req.params.courseId;
     const course = await Course.findById(courseId);
-    
+
     if (!course) {
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
     }
 
-    if (course.instructor.toString() !== req.user.id.toString() && req.user.role !== 'ADMIN') {
+    if (
+        course.instructor.toString() !== req.user.id.toString() &&
+        req.user.role !== "ADMIN"
+    ) {
         return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
     }
 
@@ -278,12 +323,12 @@ const addSection = asyncWrapper(async (req, res, next) => {
         ...req.body,
         videoUrl: videoUrl, // اللينك من Cloudinary
     });
-    
+
     await course.save();
 
-    res.status(200).json({ 
-        status: httpStatusText.SUCCESS, 
-        data: { course } 
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { course },
     });
 });
 
@@ -292,19 +337,25 @@ const updateSection = asyncWrapper(async (req, res, next) => {
     const { courseId, sectionId } = req.params;
     const course = await Course.findById(courseId);
 
-    if (!course) return next(appError.create("Course not found", 404, httpStatusText.FAIL));
-    if (course.instructor.toString() !== req.user.id && req.user.role !== 'ADMIN') {
+    if (!course)
+        return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    if (
+        course.instructor.toString() !== req.user.id &&
+        req.user.role !== "ADMIN"
+    ) {
         return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
     }
 
     const section = course.sections.id(sectionId);
-    if (!section) return next(appError.create("Section not found", 404, httpStatusText.FAIL));
+    if (!section)
+        return next(appError.create("Section not found", 404, httpStatusText.FAIL));
 
     // تحديث البيانات (سواء نصية أو الفيديو لو اترفع جديد)
     section.title = req.body.title || section.title;
-    section.learningObjective = req.body.learningObjective || section.learningObjective;
+    section.learningObjective =
+        req.body.learningObjective || section.learningObjective;
     section.duration = req.body.duration || section.duration;
-    
+
     // لو فيه فيديو جديد
     if (req.file) {
         section.videoUrl = req.file.secure_url || req.file.path;
@@ -314,20 +365,23 @@ const updateSection = asyncWrapper(async (req, res, next) => {
     res.status(200).json({ status: httpStatusText.SUCCESS, data: { course } });
 });
 
-
 // ── حذف قسم ──
 const deleteSection = asyncWrapper(async (req, res, next) => {
     const { courseId, sectionId } = req.params;
     const course = await Course.findById(courseId);
 
-    if (!course) return next(appError.create("Course not found", 404, httpStatusText.FAIL));
-    if (course.instructor.toString() !== req.user.id && req.user.role !== 'ADMIN') {
+    if (!course)
+        return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+    if (
+        course.instructor.toString() !== req.user.id &&
+        req.user.role !== "ADMIN"
+    ) {
         return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
     }
 
     // بنشيل القسم من المصفوفة
     course.sections = course.sections.filter(
-        (sec) => sec._id.toString() !== sectionId
+        (sec) => sec._id.toString() !== sectionId,
     );
 
     await course.save();
@@ -339,9 +393,18 @@ const completeSection = asyncWrapper(async (req, res, next) => {
     const userId = req.user.id;
 
     // 1. التأكد إن الطالب مشترك
-    const enrollment = await Enrollment.findOne({ user: userId, course: courseId });
+    const enrollment = await Enrollment.findOne({
+        user: userId,
+        course: courseId,
+    });
     if (!enrollment) {
-        return next(appError.create("You are not enrolled in this course", 403, httpStatusText.FAIL));
+        return next(
+            appError.create(
+                "You are not enrolled in this course",
+                403,
+                httpStatusText.FAIL,
+            ),
+        );
     }
 
     // 2. التأكد إنه مش مكرر
@@ -356,7 +419,6 @@ const completeSection = asyncWrapper(async (req, res, next) => {
         data: { completedSections: enrollment.completedSections },
     });
 });
-
 
 const getDashboardStats = asyncWrapper(async (req, res) => {
     // 1. بنجيب كل الكورسات اللي الطالب مشترك فيها
@@ -386,12 +448,15 @@ const getDashboardStats = asyncWrapper(async (req, res) => {
             completedCoursesCount++;
         } else if (!continueLearningCourse) {
             // أول كورس مش مكتمل (وهو الأحدث بفضل الـ sort) هنخليه للـ Continue Learning
-            const progress = totalSections === 0 ? 0 : Math.round((completedCount / totalSections) * 100);
+            const progress =
+                totalSections === 0
+                    ? 0
+                    : Math.round((completedCount / totalSections) * 100);
             continueLearningCourse = {
                 ...course.toObject(),
                 progress,
                 completedCount,
-                totalSections
+                totalSections,
             };
         }
     });
@@ -413,11 +478,11 @@ const getInstructorStats = asyncWrapper(async (req, res) => {
     const courses = await Course.find({ instructor: instructorId });
 
     const totalCourses = courses.length;
-    const courseIds = courses.map(course => course._id);
+    const courseIds = courses.map((course) => course._id);
 
     // 2. بنجيب عدد الطلاب المشتركين في كل الكورسات دي
-    const totalStudents = await Enrollment.countDocuments({ 
-        course: { $in: courseIds } 
+    const totalStudents = await Enrollment.countDocuments({
+        course: { $in: courseIds },
     });
 
     // 3. بنحسب متوسط التقييمات
@@ -434,12 +499,73 @@ const getInstructorStats = asyncWrapper(async (req, res) => {
             totalCourses,
             totalStudents,
             avgRating,
-            courses // ممكن نبعت الكورسات كمان لو عايزين نعرضها
+            courses, // ممكن نبعت الكورسات كمان لو عايزين نعرضها
         },
     });
 });
 
 
+// للأدمن: جلب كل طلبات الاشتراك المعلقة
+const getPendingEnrollments = asyncWrapper(async (req, res) => {
+    const enrollments = await Enrollment.find({ paymentStatus: "pending" })
+        .populate("user", "firstName lastName email")
+        .populate("course", "title price");
+    res.status(200).json({ status: httpStatusText.SUCCESS, data: { enrollments } });
+});
+
+// للأدمن: الموافقة أو الرفض
+const updateEnrollmentStatus = asyncWrapper(async (req, res, next) => {
+    const { enrollmentId } = req.params;
+    const { status } = req.body; // approved أو rejected
+
+    if (!["approved", "rejected"].includes(status)) {
+        return next(appError.create("Invalid status", 400, httpStatusText.FAIL));
+    }
+
+    const enrollment = await Enrollment.findByIdAndUpdate(
+        enrollmentId,
+        { paymentStatus: status },
+        { new: true }
+    );
+
+    res.status(200).json({ status: httpStatusText.SUCCESS, data: { enrollment } });
+});
+
+// للمدرس: كشف حساب
+const getInstructorRevenue = asyncWrapper(async (req, res) => {
+    const instructorId = req.user.id;
+    
+    // بنجيب كل الكورسات بتاعته
+    const courses = await Course.find({ instructor: instructorId }).select("_id title price");
+    const courseIds = courses.map(c => c._id);
+
+    // بنجيب كل الاشتراكات اللي اتدفعت واتوافق عليها في الكورسات دي
+    const enrollments = await Enrollment.find({
+        course: { $in: courseIds },
+        paymentStatus: "approved",
+    });
+
+    let totalRevenue = 0;
+    let totalPlatformFee = 0;
+    let netRevenue = 0;
+
+    enrollments.forEach((enrollment) => {
+        totalRevenue += enrollment.amountPaid;
+        totalPlatformFee += enrollment.platformFee;
+        netRevenue += enrollment.instructorEarnings;
+    });
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: {
+            totalCourses: courses.length,
+            totalStudents: enrollments.length,
+            totalRevenue,
+            totalPlatformFee,
+            netRevenue, // صافي أرباح المدرس
+        },
+    });
+});
 
 module.exports = {
     getAllCourse,
@@ -454,5 +580,9 @@ module.exports = {
     deleteSection,
     completeSection,
     getDashboardStats,
-    getInstructorStats
+    getInstructorStats,
+    getPendingEnrollments,
+    updateEnrollmentStatus,
+    getInstructorRevenue
+
 };
