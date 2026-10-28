@@ -599,6 +599,52 @@ const getInstructorRevenue = asyncWrapper(async (req, res) => {
     });
 });
 
+const getAllInstructorsFinancials = asyncWrapper(async (req, res) => {
+    // 1. بنجيب كل المدرسين
+    const instructors = await User.find({ role: "INSTRUCTOR" }).select("firstName lastName email avatar");
+
+    const financials = await Promise.all(instructors.map(async (instructor) => {
+        // 2. بنجيب كورسات المدرس ده
+        const courses = await Course.find({ instructor: instructor._id }).select("_id");
+        const courseIds = courses.map(c => c._id);
+
+        // 3. بنجيب كل الاشتراكات المقبولة في الكورسات دي
+        const enrollments = await Enrollment.find({
+            course: { $in: courseIds },
+            paymentStatus: "approved",
+        });
+
+        // 4. بنحسب الأرقام
+        let totalSales = 0;
+        let platformCut = 0;
+        let instructorCut = 0;
+
+        enrollments.forEach((enrollment) => {
+            totalSales += enrollment.amountPaid;
+            platformCut += enrollment.platformFee;
+            instructorCut += enrollment.instructorEarnings;
+        });
+
+        return {
+            _id: instructor._id,
+            name: `${instructor.firstName} ${instructor.lastName}`,
+            email: instructor.email,
+            avatar: instructor.avatar,
+            totalCourses: courses.length,
+            totalStudents: enrollments.length,
+            totalSales,
+            platformCut,
+            instructorCut,
+        };
+    }));
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        results: financials.length,
+        data: { financials },
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
@@ -616,6 +662,7 @@ module.exports = {
     getInstructorStats,
     getPendingEnrollments,
     updateEnrollmentStatus,
-    getInstructorRevenue
+    getInstructorRevenue,
+    getAllInstructorsFinancials
 
 };

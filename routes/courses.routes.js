@@ -33,6 +33,9 @@ router.route("/admin/pending-enrollments")
 router.route("/admin/enrollments/:enrollmentId")
     .patch(verifyToken, allowedTo(userRoles.ADMIN), courseController.updateEnrollmentStatus);
 
+router.route("/admin/instructors-financials")
+    .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getAllInstructorsFinancials);
+
 
 // ==========================================
 // 2️⃣ المسارات اللي بتستخدم الـ /:courseId
