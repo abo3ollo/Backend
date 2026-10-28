@@ -36,7 +36,8 @@ router.route("/admin/enrollments/:enrollmentId")
 router.route("/admin/instructors-financials")
     .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getAllInstructorsFinancials);
 
-
+router.route("/bunny-upload-signature")
+    .post(verifyToken, allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), courseController.getBunnyUploadSignature);
 // ==========================================
 // 2️⃣ المسارات اللي بتستخدم الـ /:courseId
 // ==========================================
@@ -75,7 +76,6 @@ router.route("/:courseId/sections")
     .post(
         verifyToken,
         allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
-        cloudinaryUpload.single("video"), 
         courseController.addSection
     );
 
@@ -88,7 +88,6 @@ router.route("/:courseId/sections/:sectionId")
     .patch(
         verifyToken, 
         allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN),
-        cloudinaryUpload.single("video"),
         courseController.updateSection
     );
 

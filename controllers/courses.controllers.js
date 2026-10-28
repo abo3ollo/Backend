@@ -6,6 +6,8 @@ const Enrollment = require("../models/enrollment.models");
 const Review = require("../models/review.models");
 const Notification = require("../models/notification.models");
 const User = require("../models/user.models"); 
+const crypto = require("crypto"); 
+
 
 const getAllCourse = asyncWrapper(async (req, res) => {
     const queryObj = { ...req.query };
@@ -323,13 +325,19 @@ const addSection = asyncWrapper(async (req, res, next) => {
         return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
     }
 
-    // ✅ لو فيه فيديو مرفوع، خد اللينك بتاعه
-    const videoUrl = req.file ? req.file.path : undefined;
+    // ✅ بنستقبل الـ videoId من الـ body
+    const { videoId } = req.body;
+    
+    // ✅ بنبني لينك المشاهدة من Bunny Stream
+    let videoUrl;
+    if (videoId) {
+        videoUrl = `https://iframe.mediadelivery.net/embed/${process.env.BUNNY_LIBRARY_ID}/${videoId}`;
+    }
 
     // نضيف القسم مع الفيديو
     course.sections.push({
         ...req.body,
-        videoUrl: videoUrl, // اللينك من Cloudinary
+        videoUrl: videoUrl, // اللينك من Bunny
     });
 
     await course.save();
@@ -364,9 +372,10 @@ const updateSection = asyncWrapper(async (req, res, next) => {
         req.body.learningObjective || section.learningObjective;
     section.duration = req.body.duration || section.duration;
 
-    // لو فيه فيديو جديد
-    if (req.file) {
-        section.videoUrl = req.file.secure_url || req.file.path;
+    // ✅ لو فيه videoId جديد، بنحدث لينك الفيديو
+    const { videoId } = req.body;
+    if (videoId) {
+        section.videoUrl = `https://iframe.mediadelivery.net/embed/${process.env.BUNNY_LIBRARY_ID}/${videoId}`;
     }
 
     await course.save();
@@ -645,6 +654,47 @@ const getAllInstructorsFinancials = asyncWrapper(async (req, res) => {
     });
 });
 
+
+const getBunnyUploadSignature = asyncWrapper(async (req, res, next) => {
+    const { title } = req.body;
+    
+    // 1. إنشاء فيديو في Bunny Stream
+    const createVideoRes = await fetch(`https://video.bunnycdn.com/library/${process.env.BUNNY_LIBRARY_ID}/videos`, {
+        method: "POST",
+        headers: {
+            "AccessKey": process.env.BUNNY_API_KEY,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title: title || "New Video" }),
+    });
+
+    if (!createVideoRes.ok) {
+        return next(appError.create("Failed to create video in Bunny", 500, httpStatusText.FAIL));
+    }
+
+    const videoData = await createVideoRes.json();
+    const videoId = videoData.guid;
+
+    // 2. إنشاء التوقيع (Signature) للرفع
+    const libraryId = process.env.BUNNY_LIBRARY_ID;
+    const apiKey = process.env.BUNNY_API_KEY;
+    const expirationTime = Math.floor(Date.now() / 1000) + 3600; // صالح لمدة ساعة
+    
+    // Bunny TUS بيحتاج التوقيع يكون بالشكل ده: sha256(library_id + api_key + expiration_time + video_id)
+    const signatureString = `${libraryId}${apiKey}${expirationTime}${videoId}`;
+    const signature = crypto.createHash('sha256').update(signatureString).digest('hex');
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: {
+            videoId,
+            libraryId,
+            signature,
+            expirationTime,
+        },
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
@@ -663,6 +713,7 @@ module.exports = {
     getPendingEnrollments,
     updateEnrollmentStatus,
     getInstructorRevenue,
-    getAllInstructorsFinancials
+    getAllInstructorsFinancials,
+    getBunnyUploadSignature
 
 };
