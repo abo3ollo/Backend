@@ -38,6 +38,10 @@ router.route("/admin/instructors-financials")
 
 router.route("/bunny-upload-signature")
     .post(verifyToken, allowedTo(userRoles.INSTRUCTOR, userRoles.ADMIN), courseController.getBunnyUploadSignature);
+
+router.route("/signed-video/:videoId")
+    .get(verifyToken , courseController.getSignedBunnyUrl);
+
 // ==========================================
 // 2️⃣ المسارات اللي بتستخدم الـ /:courseId
 // ==========================================

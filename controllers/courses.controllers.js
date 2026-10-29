@@ -695,6 +695,34 @@ const getBunnyUploadSignature = asyncWrapper(async (req, res, next) => {
     });
 });
 
+const crypto = require("crypto");
+
+const getSignedBunnyUrl = asyncWrapper(async (req, res, next) => {
+    const { videoId } = req.params;
+
+    // التأكد إن المستخدم مشترك في الكورس اللي فيه الفيديو ده (اختياري بس مهم جداً)
+    // هنفترض هنا إنك بتعمل check قبل كده أو هتعمله في دالة getSingleCourse
+
+    const libraryId = process.env.BUNNY_LIBRARY_ID;
+    const tokenAuthKey = process.env.BUNNY_TOKEN_AUTH_KEY;
+    
+    // اللينك هيبقى صالح لمدة ساعة (3600 ثانية)
+    const expires = Math.floor(Date.now() / 1000) + 3600;
+
+    // التوقيع (Hash) باستخدام SHA-256
+    const token = crypto
+        .createHash("sha256")
+        .update(`${tokenAuthKey}${videoId}${expires}`)
+        .digest("hex");
+
+    const signedUrl = `https://player.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}`;
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { signedUrl },
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
