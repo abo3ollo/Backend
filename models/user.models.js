@@ -60,6 +60,10 @@ const userSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        refreshToken: {
+            type: String,
+            select: false, // عشان ميبقاش ظاهر في أي response
+        },
     },
     {
         timestamps: true,

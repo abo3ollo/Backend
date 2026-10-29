@@ -1,13 +1,12 @@
 const User = require("../models/user.models");
 const asyncWrapper = require("../middlewares/asyncWrapper");
-const httpStatusText = require("../utils/httpStatusText")
+const httpStatusText = require("../utils/httpStatusText");
 const appError = require('../utils/appError');
 const bcrypt = require('bcryptjs');
-const generateJWT = require("../utils/generateJWT");
+const jwt = require("jsonwebtoken"); 
+const { generateAccessToken, generateRefreshToken } = require("../utils/generateJWT"); 
 const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
-
-
 
 const register = asyncWrapper(
     async (req, res, next) => {
@@ -42,12 +41,8 @@ const register = asyncWrapper(
             emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000, // 24h
         })
 
-        //generate JWT token 
-        const token = await generateJWT({ email: newUser.email, id: newUser._id, role: newUser.role })
-        newUser.token = token
-
+        // ✅ التوكن هنا مش محتاج نخزنه في الداتابيز دلوقتي (بنستخدمه بس عشان اللينك)
         await newUser.save()
-
 
         // ── send verification email ──
         const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${rawVerifyToken}`;
@@ -73,7 +68,6 @@ const register = asyncWrapper(
         res.status(201).json({ status: httpStatusText.SUCCESS, data: { user: newUser } });
 });
 
-
 const login = asyncWrapper(async (req, res, next) => {
     const { email, password } = req.body;
 
@@ -81,7 +75,6 @@ const login = asyncWrapper(async (req, res, next) => {
         return next(appError.create('Email & password are required', 400, httpStatusText.FAIL));
     }
 
-    // ✅ select password
     const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
@@ -93,7 +86,6 @@ const login = asyncWrapper(async (req, res, next) => {
         return next(appError.create('Invalid credentials', 401, httpStatusText.FAIL));
     }
 
-    // ✅ NEW: امنع الدخول لو مش متحقق
     if (!user.isVerified) {
         return next(appError.create(
             'Please verify your email first. Check your inbox.',
@@ -102,30 +94,79 @@ const login = asyncWrapper(async (req, res, next) => {
         ));
     }
 
-    const token = await generateJWT({
-        email: user.email,
-        id: user._id,
-        role: user.role,
-    });
+    // ✅ إصدار التوكنات
+    const payload = { email: user.email, id: user._id, role: user.role };
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
+
+    // ✅ حفظ الـ Refresh Token في الداتابيز
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
 
     user.password = undefined;
 
-    // ✅ حط التوكن في httpOnly cookie
-    res.cookie("token", token, {
+    // ✅ حط الـ Access Token في كوكي (15 دقيقة)
+    res.cookie("token", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 24 * 60 * 60 * 1000,   // 1 يوم
+        maxAge: 15 * 60 * 1000, // 15 دقيقة
         path: "/",
     });
 
-    // ✅ رجّع user بس (مفيش token)
+    // ✅ حط الـ Refresh Token في كوكي (7 أيام)
+    res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 أيام
+        path: "/",
+    });
+
     res.status(200).json({
         status: httpStatusText.SUCCESS,
         data: { user },
     });
 });
 
+const refresh = asyncWrapper(async (req, res, next) => {
+    const { refreshToken } = req.cookies;
+
+    if (!refreshToken) {
+        return next(appError.create("Refresh token is required", 401, httpStatusText.FAIL));
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        
+        const user = await User.findById(decoded.id).select("+refreshToken");
+        
+        // تأكد إن الـ Refresh Token اللي في الكوكي هو نفسه اللي في الداتابيز
+        if (!user || user.refreshToken !== refreshToken) {
+            return next(appError.create("Invalid refresh token", 401, httpStatusText.FAIL));
+        }
+
+        // أصدر Access Token جديد
+        const newAccessToken = generateAccessToken({ 
+            email: user.email, 
+            id: user._id, 
+            role: user.role 
+        });
+
+        // حدث الكوكي
+        res.cookie("token", newAccessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 15 * 60 * 1000,
+            path: "/",
+        });
+
+        res.status(200).json({ status: httpStatusText.SUCCESS, message: "Token refreshed" });
+    } catch (err) {
+        return next(appError.create("Invalid refresh token", 401, httpStatusText.FAIL));
+    }
+});
 
 const verifyEmail = asyncWrapper(async (req, res, next) => {
     const { token } = req.params;
@@ -161,7 +202,6 @@ const resendVerification = asyncWrapper(async (req, res, next) => {
 
     const user = await User.findOne({ email });
 
-    // ✅ رد عام في كل الحالات (منع user enumeration)
     const genericResponse = {
         status: httpStatusText.SUCCESS,
         message: "If that email exists and is not verified, a verification link has been sent.",
@@ -171,15 +211,13 @@ const resendVerification = asyncWrapper(async (req, res, next) => {
         return res.status(200).json(genericResponse);
     }
 
-    // اعمل توكن جديد
     const rawToken = crypto.randomBytes(32).toString("hex");
     const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
 
     user.emailVerificationToken = hashed;
-    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 ساعة
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
 
-    // ابعت الإيميل
     const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${rawToken}`;
 
     if (process.env.SMTP_HOST) {
@@ -203,37 +241,30 @@ const resendVerification = asyncWrapper(async (req, res, next) => {
     res.status(200).json(genericResponse);
 });
 
-
 const forgotPassword = asyncWrapper(async (req, res, next) => {
     const { email } = req.body;
 
-    // 1. دوّر على المستخدم
     const user = await User.findOne({ email });
 
-    // 2. رد عام في كل الحالات (منع user enumeration)
     const genericResponse = {
         status: httpStatusText.SUCCESS,
         message: "If that email exists, a reset link has been sent.",
     };
 
     if (!user) {
-        // مش بنقول إن الإيميل مش موجود
         return res.status(200).json(genericResponse);
     }
 
-    // 3. اعمل توكن عشوائي + هاش
     const rawToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto
         .createHash("sha256")
         .update(rawToken)
         .digest("hex");
 
-    // 4. خزّن الهاش + تاريخ الانتهاء (15 دقيقة)
     user.passwordResetToken = hashedToken;
     user.passwordResetExpires = Date.now() + 15 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
 
-    // 5. ابعت الإيميل بالتوكن الخام
     const resetUrl = `${process.env.CLIENT_URL}/reset-password/${rawToken}`;
 
     if (process.env.SMTP_HOST) {
@@ -251,7 +282,6 @@ const forgotPassword = asyncWrapper(async (req, res, next) => {
             });
         } catch (err) {
             console.warn("Email send failed:", err.message);
-            // اختياري: لو الإيميل فشل، نمسح التوكن
             user.passwordResetToken = undefined;
             user.passwordResetExpires = undefined;
             await user.save({ validateBeforeSave: false });
@@ -263,18 +293,15 @@ const forgotPassword = asyncWrapper(async (req, res, next) => {
     res.status(200).json(genericResponse);
 });
 
-
 const resetPassword = asyncWrapper(async (req, res, next) => {
-    const { token } = req.params;      // من الـ URL
-    const { password } = req.body;     // من الفورم/Postman
+    const { token } = req.params;
+    const { password } = req.body;
 
-    // 1. hash للتوكن
     const hashedToken = crypto
         .createHash("sha256")
         .update(token)
         .digest("hex");
 
-    // 2. دوّر على المستخدم بالهاش + التوكن لسه صالح
     const user = await User.findOne({
         passwordResetToken: hashedToken,
         passwordResetExpires: { $gt: Date.now() },
@@ -288,16 +315,14 @@ const resetPassword = asyncWrapper(async (req, res, next) => {
         ));
     }
 
-    // 3. hash الباسورد الجديد
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
 
-    // 4. امسح التوكن
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
 
-    // 5. اقتل كل الجلسات القديمة
     user.tokenVersion = (user.tokenVersion || 0) + 1;
+    user.refreshToken = undefined; // ✅ امسح الـ Refresh Token برضه
     user.token = undefined;
 
     await user.save({ validateBeforeSave: false });
@@ -308,15 +333,26 @@ const resetPassword = asyncWrapper(async (req, res, next) => {
     });
 });
 
-
 const logout = asyncWrapper(async (req, res) => {
-    // ✅ امسح الكوكي
-    res.clearCookie("token", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-    });
+    const { refreshToken } = req.cookies;
+
+    // ✅ لو فيه Refresh Token، بنمسحه من الداتابيز
+    if (refreshToken) {
+        try {
+            const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+            const user = await User.findById(decoded.id);
+            if (user) {
+                user.refreshToken = undefined;
+                await user.save({ validateBeforeSave: false });
+            }
+        } catch (err) {
+            // لو التوكن بايظ، مش مشكلة، هنمسح الكوكيز وخلاص
+        }
+    }
+
+    // ✅ امسح الكوكيز
+    res.clearCookie("token");
+    res.clearCookie("refreshToken");
 
     res.status(200).json({
         status: httpStatusText.SUCCESS,
@@ -324,23 +360,17 @@ const logout = asyncWrapper(async (req, res) => {
     });
 });
 
-
 const logoutAll = asyncWrapper(async (req, res) => {
     const user = await User.findById(req.user.id);
 
     if (user) {
-        // ✅ اقتل كل الجلسات
         user.tokenVersion = (user.tokenVersion || 0) + 1;
+        user.refreshToken = undefined; // ✅ امسح الـ Refresh Token برضه
         await user.save({ validateBeforeSave: false });
     }
 
-    // ✅ امسح الكوكي
-    res.clearCookie("token", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-    });
+    res.clearCookie("token");
+    res.clearCookie("refreshToken");
 
     res.status(200).json({
         status: httpStatusText.SUCCESS,
@@ -351,6 +381,7 @@ const logoutAll = asyncWrapper(async (req, res) => {
 module.exports = {
     register,
     login,
+    refresh,
     verifyEmail,
     resendVerification,
     forgotPassword,

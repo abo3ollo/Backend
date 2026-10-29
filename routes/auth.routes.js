@@ -52,6 +52,9 @@ router.route("/register")
 router.route("/login")
             .post(loginValidator, authController.login)
 
+router.route("/refresh")
+            .post(authController.refresh);
+
 router.route("/verify-email/:token")
             .get(authController.verifyEmail);
 
