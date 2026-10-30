@@ -743,6 +743,19 @@ const markAsPaidToInstructor = asyncWrapper(async (req, res, next) => {
     });
 });
 
+const getCourseEnrollments = asyncWrapper(async (req, res) => {
+    const { courseId } = req.params;
+    
+    const enrollments = await Enrollment.find({ course: courseId, paymentStatus: "approved" })
+        .populate("user", "firstName lastName email avatar")
+        .sort({ createdAt: -1 });
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: { enrollments },
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
@@ -764,6 +777,7 @@ module.exports = {
     getAllInstructorsFinancials,
     getBunnyUploadSignature,
     getSignedBunnyUrl,
-    markAsPaidToInstructor
+    markAsPaidToInstructor,
+    getCourseEnrollments
 
 };
