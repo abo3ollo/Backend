@@ -695,7 +695,6 @@ const getBunnyUploadSignature = asyncWrapper(async (req, res, next) => {
     });
 });
 
-const crypto = require("crypto");
 
 const getSignedBunnyUrl = asyncWrapper(async (req, res, next) => {
     const { videoId } = req.params;
@@ -742,6 +741,7 @@ module.exports = {
     updateEnrollmentStatus,
     getInstructorRevenue,
     getAllInstructorsFinancials,
-    getBunnyUploadSignature
+    getBunnyUploadSignature,
+    getSignedBunnyUrl
 
 };
