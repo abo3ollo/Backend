@@ -722,6 +722,27 @@ const getSignedBunnyUrl = asyncWrapper(async (req, res, next) => {
     });
 });
 
+const markAsPaidToInstructor = asyncWrapper(async (req, res, next) => {
+    const { enrollmentId } = req.params;
+
+    const enrollment = await Enrollment.findById(enrollmentId);
+
+    if (!enrollment) {
+        return next(appError.create("Enrollment not found", 404, httpStatusText.FAIL));
+    }
+
+    // تغيير الحالة وتسجيل التاريخ
+    enrollment.isPaidToInstructor = true;
+    enrollment.paidAt = Date.now();
+    await enrollment.save();
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: "Marked as paid to instructor successfully",
+        data: { enrollment },
+    });
+});
+
 module.exports = {
     getAllCourse,
     getSingleCourse,
@@ -742,6 +763,7 @@ module.exports = {
     getInstructorRevenue,
     getAllInstructorsFinancials,
     getBunnyUploadSignature,
-    getSignedBunnyUrl
+    getSignedBunnyUrl,
+    markAsPaidToInstructor
 
 };

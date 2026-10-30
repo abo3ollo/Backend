@@ -33,6 +33,13 @@ router.route("/admin/pending-enrollments")
 router.route("/admin/enrollments/:enrollmentId")
     .patch(verifyToken, allowedTo(userRoles.ADMIN), courseController.updateEnrollmentStatus);
 
+router.route("/admin/enrollments/:enrollmentId/pay-instructor")
+    .patch(
+        verifyToken,
+        allowedTo(userRoles.ADMIN),
+        courseController.markAsPaidToInstructor
+    );
+
 router.route("/admin/instructors-financials")
     .get(verifyToken, allowedTo(userRoles.ADMIN), courseController.getAllInstructorsFinancials);
 

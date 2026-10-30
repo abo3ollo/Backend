@@ -3,9 +3,13 @@ const mongoose = require("mongoose");
 const enrollmentSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      required: true,
+    },
     completedSections: [{ type: mongoose.Schema.Types.ObjectId }],
-    
+
     // ✅ حقول الدفع الجديدة
     paymentStatus: {
       type: String,
@@ -22,8 +26,22 @@ const enrollmentSchema = new mongoose.Schema(
     // نسبة المنصة (15%) والمدرس (85%)
     platformFee: { type: Number },
     instructorEarnings: { type: Number },
+
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    // ✅ الحقول الجديدة
+    isPaidToInstructor: {
+      type: Boolean,
+      default: false,
+    },
+    paidAt: {
+      type: Date,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // منع المستخدم إنه يتسجل في نفس الكورس مرتين
