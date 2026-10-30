@@ -18,6 +18,7 @@ app.use(cors({
     "http://localhost:3000",
     "https://course-project-ten-gules.vercel.app",
     "https://course-project-full.vercel.app",
+    "https://ebda3-chi.vercel.app",
     process.env.CLIENT_URL,
   ].filter(Boolean),
   credentials: true,   // ← مهم جدًا
