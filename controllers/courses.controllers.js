@@ -355,8 +355,10 @@ const updateSection = asyncWrapper(async (req, res, next) => {
 
     if (!course)
         return next(appError.create("Course not found", 404, httpStatusText.FAIL));
+
+    // ✅ المقارنة تكون String عشان نتجنب مشاكل ObjectId
     if (
-        course.instructor.toString() !== req.user.id &&
+        course.instructor.toString() !== req.user.id.toString() &&
         req.user.role !== "ADMIN"
     ) {
         return next(appError.create("Unauthorized", 403, httpStatusText.FAIL));
@@ -366,20 +368,32 @@ const updateSection = asyncWrapper(async (req, res, next) => {
     if (!section)
         return next(appError.create("Section not found", 404, httpStatusText.FAIL));
 
-    // تحديث البيانات (سواء نصية أو الفيديو لو اترفع جديد)
+    // تحديث البيانات النصية
     section.title = req.body.title || section.title;
-    section.learningObjective =
-        req.body.learningObjective || section.learningObjective;
+    section.learningObjective = req.body.learningObjective || section.learningObjective;
     section.duration = req.body.duration || section.duration;
 
-    // ✅ لو فيه videoId جديد، بنحدث لينك الفيديو
+    // ✅ التعامل مع الفيديو
     const { videoId } = req.body;
-    if (videoId) {
+    
+    if (videoId === null) {
+        // لو الفرونت بعت null، بنمسح الفيديو
+        section.videoId = undefined;
+        section.videoUrl = undefined;
+    } else if (videoId) {
+        // لو فيه فيديو جديد، بنحفظ الـ videoId (مش اللينك)
+        section.videoId = videoId;
+        // (اختياري) ممكن نحفظ اللينك كمان لو محتاجه في مكان تاني
         section.videoUrl = `https://iframe.mediadelivery.net/embed/${process.env.BUNNY_LIBRARY_ID}/${videoId}`;
     }
+    // لو مفيش videoId في الـ body، الفيديو القديم هيفضل زي ما هو
 
     await course.save();
-    res.status(200).json({ status: httpStatusText.SUCCESS, data: { course } });
+    
+    res.status(200).json({ 
+        status: httpStatusText.SUCCESS, 
+        data: { course } 
+    });
 });
 
 // ── حذف قسم ──

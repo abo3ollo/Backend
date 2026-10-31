@@ -47,6 +47,7 @@ const courseSchema = new mongoose.Schema(
         introVideoTitle: { type: String }, // ✅ جديد
         duration: { type: String }, // ✅ جديد
         videoUrl: { type: String }, // ✅ جديد
+        videoId: String, // ✅ لازم يكون موجود هنا
         isFreePreview: { type: Boolean, default: false }, // ✅ جديد
         isDraft: { type: Boolean, default: false }, // ✅ جديد
         lessons: [
